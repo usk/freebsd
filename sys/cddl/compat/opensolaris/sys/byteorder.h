@@ -86,4 +86,6 @@
 #define	ntohll(x)	BSWAP_64(x)
 #endif
 
+#define BE_IN32(xa)	htonl(*((uint32_t *)(void *)(xa)))
+
 #endif /* _OPENSOLARIS_SYS_BYTEORDER_H_ */
