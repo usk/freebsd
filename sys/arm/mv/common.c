@@ -2080,6 +2080,7 @@ fdt_fixup_busfreq(phandle_t root)
 
 struct fdt_fixup_entry fdt_fixup_table[] = {
 	{ "mrvl,DB-88F6281", &fdt_fixup_busfreq },
+	{ "mrvl,DB-88F6282", &fdt_fixup_busfreq },
 	{ "mrvl,DB-78460", &fdt_fixup_busfreq },
 	{ NULL, NULL }
 };
