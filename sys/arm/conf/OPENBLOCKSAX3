@@ -1,0 +1,40 @@
+#
+# Custom kernel for Plat'Home OpenBlocks AX3.
+#
+# $FreeBSD$
+#
+
+include			ARMADAXP
+ident			OPENBLOCKSAX3
+
+# custom load address
+nomakeoptions	KERNPHYSADDR
+makeoptions		KERNPHYSADDR=0x00f00000
+nomakeoptions	KERNVIRTADDR
+makeoptions		KERNVIRTADDR=0xc0f00000
+nooptions		KERNPHYSADDR
+options			KERNPHYSADDR=0x00f00000
+nooptions		KERNVIRTADDR
+options			KERNVIRTADDR=0xc0f00000
+
+# debug
+nooptions		SMP
+options			BOOTVERBOSE=1
+options			VERBOSE_SYSINIT
+options			SOCDEV_VA=0xf1000000	# Armada XP INTER_REGS_BASE (virtual)
+options			SOCDEV_PA=0xd0000000	# Armada XP INTER_REGS_BASE (physical)
+
+# ufs:/dev/da0p1 as rootfs
+nooptions		BOOTP
+nooptions		BOOTP_NFSROOT
+nooptions		BOOTP_NFSV3
+nooptions		BOOTP_WIRED_TO
+options			SCSI_DELAY=5000
+
+# custom devices
+device			axe, axge, rgephy, cdce
+device			s35390a
+
+# custom dts
+nomakeoptions	FDT_DTS_FILE
+makeoptions		FDT_DTS_FILE=openblocksax3.dts
