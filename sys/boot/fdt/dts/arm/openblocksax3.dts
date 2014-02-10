@@ -110,6 +110,16 @@
 			reg = <0x11100 0x20>;
 			interrupts = <32>;
 			interrupt-parent = <&MPIC>;
+
+			iicbus@0 {
+				model = "iicbus";
+
+				rtc@60 {
+					compatible = "sii,s35390a";
+					model = "s35390a_rtc";
+					i2c-address = <0x60>;
+				};
+			};
 		};
 
 		serial0: serial@12000 {
