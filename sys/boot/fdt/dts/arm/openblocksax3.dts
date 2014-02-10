@@ -101,6 +101,16 @@
 			reg = <0x11000 0x20>;
 			interrupts = <31>;
 			interrupt-parent = <&MPIC>;
+
+			iicbus@0 {
+				model = "iicbus";
+
+				eeprom@a0 {
+					compatible = "sii,s24c02c";
+					model = "s24c02c_eeprom";
+					i2c-address = <0xa0>;
+				};
+			};
 		};
 
 		twsi@11100 {
