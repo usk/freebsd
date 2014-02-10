@@ -1,0 +1,37 @@
+#
+# Custom kernel for Plat'Home OpenBlocks AX3.
+#
+# $FreeBSD$
+#
+
+include		ARMADAXP
+ident		OPENBLOCKSAX3
+
+nooptions 	BOOTP
+nooptions 	BOOTP_NFSROOT
+nooptions 	BOOTP_NFSV3
+nooptions 	BOOTP_WIRED_TO
+
+nooptions 	SMP
+
+options 	SOFTUPDATES			# Enable FFS soft updates support
+options 	UFS_ACL				# Support for access control lists
+options 	UFS_DIRHASH			# Improve performance on big directories
+options 	NFSD				# New Network Filesystem Server
+options 	MSDOSFS				# MSDOS Filesystem
+options 	CD9660				# ISO 9660 Filesystem
+options 	PROCFS				# Process filesystem (requires PSEUDOFS)
+options 	PSEUDOFS			# Pseudo-filesystem framework
+options 	SCSI_DELAY=5000			# Delay (in ms) before probing SCSI
+
+# Debugging
+#options 	BOOTVERBOSE=1
+#options 	VERBOSE_SYSINIT
+
+# USB
+device		cdce				# Generic USB over Ethernet
+device		axe, rgephy			# ASIX Electronics USB Ethernet and RealTek 8169S/8110S/8211B/8211C PHY
+
+#FDT
+nomakeoptions	FDT_DTS_FILE			# unset FDT_DTS_FILE
+makeoptions	FDT_DTS_FILE=openblocksax3.dts
