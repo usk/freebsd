@@ -32,6 +32,9 @@ options 	SCSI_DELAY=5000			# Delay (in ms) before probing SCSI
 device		cdce				# Generic USB over Ethernet
 device		axe, rgephy			# ASIX Electronics USB Ethernet and RealTek 8169S/8110S/8211B/8211C PHY
 
+# SATA (sometimes hangs up...)
+nodevice	mvs
+
 # I2C (TWSI)
 device		s35390a
 
