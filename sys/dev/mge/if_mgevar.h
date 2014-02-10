@@ -106,6 +106,8 @@ struct mge_softc {
 	int		mge_intr_cnt;
 	uint8_t		mge_hw_csum;
 
+	uint32_t	port_version;
+
 	struct mge_softc *phy_sc;
 };
 
@@ -238,8 +240,17 @@ struct mge_softc {
 #define MGE_STATUS_TX_FIFO_EMPTY	(1 << 10)
 
 #define MGE_TX_QUEUE_CMD	0x448
-#define MGE_ENABLE_TXQ		(1 << 0)
-#define MGE_DISABLE_TXQ		(1 << 8)
+#define MGE_ENABLE_TXQ(q)	(1 << ((q) + 0))
+#define MGE_DISABLE_TXQ(q)	(1 << ((q) + 8))
+
+/* Armada XP Ethernet Port Status 0 */
+#define MGE_PORT_VERSION		(0x1bc + 0x400)		/* correct? */
+#define MGE_PORT_STATUS0		(0x2c10 + 0x400)	/* correct? */
+#define MGE_STATUS0_LINKUP		(1 << 0)
+#define MGE_STATUS_TX_IN_PROG_MASK	(0xff << 0)
+#define MGE_STATUS_TX_IN_PROG_(q)	(1 << ((q) + 0))
+#define MGE_STATUS_TX_FIFO_EMPTY_MASK	(0xff << 8)
+#define MGE_STATUS_TX_FIFO_EMPTY_(q)	(1 << ((q) + 8))
 
 /* 88F6281 only */
 #define MGE_PORT_SERIAL_CTRL1		0x44c

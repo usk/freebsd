@@ -252,11 +252,11 @@
 			compatible = "mrvl,ge";
 			reg = <0x72000 0x2000>;
 			ranges = <0x0 0x72000 0x2000>;
-			local-mac-address = [ 00 04 01 07 84 60 ];
 			interrupts = <67 68 122 >;
 			interrupt-parent = <&MPIC>;
 			phy-handle = <&phy0>;
 			has-neta;
+			has-port-version;
 
 			mdio@0 {
 				#address-cells = <1>;
@@ -266,15 +266,6 @@
 				/* Marvell Alaska 88E1543 SGMII PHY */
 				phy0: ethernet-phy@0 {
 					reg = <0x0>;
-				};
-				phy1: ethernet-phy@1 {
-					reg = <0x1>;
-				};
-				phy2: ethernet-phy@2 {
-					reg = <0x19>;
-				};
-				phy3: ethernet-phy@3 {
-					reg = <0x1b>;
 				};
 			};
 		};

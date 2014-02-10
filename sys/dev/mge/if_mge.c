@@ -654,6 +654,10 @@ mge_attach(device_t dev)
 	if (fdt_get_phyaddr(sc->node, sc->dev, &phy, (void **)&sc->phy_sc) != 0)
 		return (ENXIO);
 
+	device_printf(dev, "sc=%p\n", sc);
+	device_printf(dev, "phy_sc=%p (%s)\n", sc->phy_sc, device_get_nameunit(sc->phy_sc->dev));
+	device_printf(dev, "phy=0x%x\n", phy);
+
 	/* Initialize mutexes */
 	mtx_init(&sc->transmit_lock, device_get_nameunit(dev), "mge TX lock", MTX_DEF);
 	mtx_init(&sc->receive_lock, device_get_nameunit(dev), "mge RX lock", MTX_DEF);
@@ -745,6 +749,12 @@ mge_attach(device_t dev)
 			mge_detach(dev);
 			return (error);
 		}
+	}
+
+	sc->port_version = 0x00;
+	if (OF_hasprop(sc->node, "has-port-version")) {
+		sc->port_version = MGE_READ(sc, MGE_PORT_VERSION);
+		device_printf(dev, "Port Version 0x%x\n", sc->port_version);
 	}
 
 	return (0);
@@ -965,9 +975,15 @@ mge_init_locked(void *arg)
 	MGE_WRITE(sc, MGE_PORT_SERIAL_CTRL, reg_val);
 	count = 0x100000;
 	for (;;) {
-		reg_val = MGE_READ(sc, MGE_PORT_STATUS);
-		if (reg_val & MGE_STATUS_LINKUP)
-			break;
+		if (sc->port_version > 0) {
+			reg_val = MGE_READ(sc, MGE_PORT_STATUS0);
+			if (reg_val & MGE_STATUS0_LINKUP)
+				break;
+		} else {
+			reg_val = MGE_READ(sc, MGE_PORT_STATUS);
+			if (reg_val & MGE_STATUS_LINKUP)
+				break;
+		}
 		DELAY(100);
 		if (--count == 0) {
 			if_printf(sc->ifp, "Timeout on link-up\n");
@@ -1569,7 +1585,7 @@ mge_start_locked(struct ifnet *ifp)
 	if (queued) {
 		/* Enable transmitter and watchdog timer */
 		reg_val = MGE_READ(sc, MGE_TX_QUEUE_CMD);
-		MGE_WRITE(sc, MGE_TX_QUEUE_CMD, reg_val | MGE_ENABLE_TXQ);
+		MGE_WRITE(sc, MGE_TX_QUEUE_CMD, reg_val | MGE_ENABLE_TXQ(0));
 		sc->wd_timer = 5;
 	}
 }
@@ -1600,7 +1616,7 @@ mge_stop(struct mge_softc *sc)
 
 	/* Disable Rx and Tx */
 	reg_val = MGE_READ(sc, MGE_TX_QUEUE_CMD);
-	MGE_WRITE(sc, MGE_TX_QUEUE_CMD, reg_val | MGE_DISABLE_TXQ);
+	MGE_WRITE(sc, MGE_TX_QUEUE_CMD, reg_val | MGE_DISABLE_TXQ(0));
 	MGE_WRITE(sc, MGE_RX_QUEUE_CMD, MGE_DISABLE_RXQ_ALL);
 
 	/* Remove pending data from TX queue */
@@ -1634,9 +1650,15 @@ mge_stop(struct mge_softc *sc)
 	count = 0x100000;
 	while (count--) {
 		reg_val = MGE_READ(sc, MGE_PORT_STATUS);
-		if ( !(reg_val & MGE_STATUS_TX_IN_PROG) &&
-		    (reg_val & MGE_STATUS_TX_FIFO_EMPTY))
-			break;
+		if (sc->port_version > 0) {
+			if ( !(reg_val & MGE_STATUS_TX_IN_PROG_(0)) &&
+			     (reg_val & MGE_STATUS_TX_FIFO_EMPTY_(0)))
+				break;
+		} else {
+			if ( !(reg_val & MGE_STATUS_TX_IN_PROG) &&
+			     (reg_val & MGE_STATUS_TX_FIFO_EMPTY))
+				break;
+		}
 		DELAY(100);
 	}
 
