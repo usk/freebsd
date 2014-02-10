@@ -54,6 +54,11 @@ __FBSDID("$FreeBSD$");
 #include <arm/mv/mvwin.h>
 
 
+#ifdef SOC_MV_ARMADAXP
+void mvUartPutc(unsigned char c);
+void mvUartPuts(unsigned char *s);
+#endif /* SOC_MV_ARMADAXP */
+
 MALLOC_DEFINE(M_IDMA, "idma", "idma dma test memory");
 
 #define IDMA_DEBUG
@@ -525,31 +530,39 @@ soc_decode_win(void)
 	uint32_t dev, rev;
 	int mask, err;
 
+	mvUartPuts("TUNABLE_INT_FETCH()\n");
 	mask = 0;
 	TUNABLE_INT_FETCH("hw.pm-disable-mask", &mask);
 
-	if (mask != 0)
+	if (mask != 0) {
+		mvUartPuts("pm_disable_device()\n");
 		pm_disable_device(mask);
+	}
 
 	/* Retrieve data about physical addresses from device tree. */
+	mvUartPuts("win_cpu_from_dt()\n");
 	if ((err = win_cpu_from_dt()) != 0)
 		return (err);
 
 	/* Retrieve our ID: some windows facilities vary between SoC models */
+	mvUartPuts("soc_id()\n");
 	soc_id(&dev, &rev);
 
 #ifdef SOC_MV_ARMADAXP
+	mvUartPuts("decode_win_sdram_fixup()\n");
 	if ((err = decode_win_sdram_fixup()) != 0)
 		return(err);
 #endif
 
 #ifndef SOC_MV_FREY
+	mvUartPuts("decode_win_*_valid()\n");
 	if (!decode_win_cpu_valid() || !decode_win_usb_valid() ||
 	    !decode_win_eth_valid() || !decode_win_idma_valid() ||
 	    !decode_win_pcie_valid() || !decode_win_sata_valid() ||
 	    !decode_win_xor_valid())
 		return (EINVAL);
 
+	mvUartPuts("decode_cpu_setup()\n");
 	decode_win_cpu_setup();
 #else
 	if (!decode_win_usb_valid() ||
@@ -558,9 +571,12 @@ soc_decode_win(void)
 	    !decode_win_xor_valid())
 		return (EINVAL);
 #endif
-	if (MV_DUMP_WIN)
+	if (MV_DUMP_WIN) {
+		mvUartPuts("soc_dump_decode_win()\n");
 		soc_dump_decode_win();
+	}
 
+	mvUartPuts("fdt_win_setup()\n");
 	eth_port = 0;
 	usb_port = 0;
 	if ((err = fdt_win_setup()) != 0)
@@ -2021,6 +2037,7 @@ fdt_win_setup(void)
 	u_long size, base;
 	int err, i;
 
+	mvUartPuts("OF_finddevice(/)\n");
 	node = OF_finddevice("/");
 	if (node == -1)
 		panic("fdt_win_setup: no root node");
@@ -2029,6 +2046,7 @@ fdt_win_setup(void)
 	 * Traverse through all children of root and simple-bus nodes.
 	 * For each found device retrieve decode windows data (if applicable).
 	 */
+	mvUartPuts("OF_child(/)\n");
 	child = OF_child(node);
 	while (child != 0) {
 		for (i = 0; soc_nodes[i].compat != NULL; i++) {
@@ -2050,6 +2068,8 @@ fdt_win_setup(void)
 
 			if (MV_DUMP_WIN && (soc_node->dump_handler != NULL))
 				soc_node->dump_handler(base);
+			mvUartPuts((unsigned char*)(soc_node->compat));
+			mvUartPuts("\n");
 		}
 
 		/*
@@ -2058,6 +2078,7 @@ fdt_win_setup(void)
 		 */
 		child = OF_peer(child);
 		if ((child == 0) && (node == OF_finddevice("/"))) {
+			mvUartPuts("fdt_find_compatible(simple-bus)\n");
 			node = fdt_find_compatible(node, "simple-bus", 1);
 			if (node == 0)
 				return (ENXIO);
@@ -2065,6 +2086,7 @@ fdt_win_setup(void)
 		}
 	}
 
+	mvUartPuts("fdt_win_setup() done\n");
 	return (0);
 }
 

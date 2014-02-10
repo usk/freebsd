@@ -88,6 +88,10 @@ ASENTRY_NP(_start)
 	mrs	r7, cpsr
 	orr	r7, r7, #(I32_bit|F32_bit)
 	msr	cpsr_c, r7
+	/* print 'A' */
+	ldr	r0, =0xd0012000
+	mov	r1, #65
+	strb	r1, [r0]
 
 #if defined (FLASHADDR) && defined(LOADERRAMADDR)
 	/* Check if we're running from flash. */
@@ -129,6 +133,10 @@ from_ram:
 	bic     r7, r7, #0xf0000000
 	orr     r7, r7, #PHYSADDR
 
+	/* print 'B' */
+	ldr	r0, =0xd0012000
+	mov	r1, #66
+	strb	r1, [r0]
 
 disable_mmu:
 	/* Disable MMU for a while */
@@ -142,6 +150,10 @@ disable_mmu:
 	nop
 	nop
 	nop
+	/* print 'C' */
+	ldr	r0, =0xd0012000
+	mov	r1, #67
+	strb	r1, [r0]
 	mov	pc, r7
 Lunmapped:
 	/*
@@ -226,6 +238,10 @@ Lunmapped:
 
 mmu_done:
 	nop
+	/* print 'D' */
+	ldr	r0, =0xf1012000
+	mov	r1, #68
+	strb	r1, [r0]
 	adr	r1, .Lstart
 	ldmia	r1, {r1, r2, sp}	/* Set initial stack and */
 	sub	r2, r2, r1		/* get zero init data */
@@ -237,6 +253,11 @@ mmu_done:
 	ldr	pc, .Lvirt_done
 
 virt_done:
+	/* print 'E' */
+	ldr	r0, =0xf1012000
+	mov	r1, #69
+	strb	r1, [r0]
+
 	mov	r1, #28			/* loader info size is 28 bytes also second arg */
 	subs	sp, sp, r1		/* allocate arm_boot_params struct on stack */
 	mov	r0, sp			/* loader info pointer is first arg */
@@ -256,6 +277,10 @@ virt_done:
 	/* init arm will return the new stack pointer. */
 	mov	sp, r0
 
+	/* print 'F' */
+	ldr	r0, =0xf1012000
+	mov	r1, #70
+	strb	r1, [r0]
 	bl	_C_LABEL(mi_startup)		/* call mi_startup()! */
 
 	adr	r0, .Lmainreturned
@@ -311,6 +336,28 @@ Lend:
 #ifdef SMP
 Lstartup_pagetable_secondary:
 	.word	temp_pagetable
+#endif
+
+#if 0
+mmu_init_table:
+	/* fill all table VA==PA */
+	/* map SDRAM VA==PA, WT cacheable */
+#if !defined(SMP)
+	MMU_INIT(PHYSADDR, PHYSADDR , 64, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
+	/* map VA 0xc0000000..0xc3ffffff to PA */
+	MMU_INIT(KERNBASE, PHYSADDR, 64, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
+#if defined(CPU_MV_PJ4B)
+	/* map VA 0xf1000000..0xf1100000 to PA 0xd0000000 */
+	MMU_INIT(0xf1000000, 0xd0000000, 1, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
+#endif /* CPU_MV_PJ4B */
+#else
+	MMU_INIT(PHYSADDR, PHYSADDR , 64, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
+	/* map VA 0xc0000000..0xc3ffffff to PA */
+	MMU_INIT(KERNBASE, PHYSADDR, 64, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
+	MMU_INIT(0x48000000, 0x48000000, 1, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
+#endif /* SMP */
+	.word 0	/* end of table */
+#endif
 #endif
 
 .Lstart:

@@ -91,6 +91,10 @@ __FBSDID("$FreeBSD$");
 #include <ddb/ddb.h>
 #include <ddb/db_sym.h>
 
+#ifdef SOC_MV_ARMADAXP
+void mvUartPutc(unsigned char c);
+void mvUartPuts(unsigned char *s);
+#endif /* SOC_MV_ARMADAXP */
 void mi_startup(void);				/* Should be elsewhere */
 
 /* Components of the first process -- never freed. */
@@ -220,6 +224,7 @@ restart:
 	 * Perform a bubble sort of the system initialization objects by
 	 * their subsystem (primary key) and order (secondary key).
 	 */
+	mvUartPuts("mi_startup: restart\n");
 	for (sipp = sysinit; sipp < sysinit_end; sipp++) {
 		for (xipp = sipp + 1; xipp < sysinit_end; xipp++) {
 			if ((*sipp)->subsystem < (*xipp)->subsystem ||
@@ -300,12 +305,14 @@ restart:
 		}
 	}
 
+	mvUartPuts("mi_startup: unlock mutex\n");
 	mtx_assert(&Giant, MA_OWNED | MA_NOTRECURSED);
 	mtx_unlock(&Giant);
 
 	/*
 	 * Now hand over this thread to swapper.
 	 */
+	mvUartPuts("mi_startup: call swapper\n");
 	swapper();
 	/* NOTREACHED*/
 }

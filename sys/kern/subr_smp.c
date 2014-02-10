@@ -125,6 +125,7 @@ struct mtx smp_ipi_mtx;
 static void
 mp_setmaxid(void *dummy)
 {
+	printf("sysinit: mp_setmaxid()\n");
 	cpu_mp_setmaxid();
 }
 SYSINIT(cpu_mp_setmaxid, SI_SUB_TUNABLES, SI_ORDER_FIRST, mp_setmaxid, NULL);
@@ -136,7 +137,9 @@ static void
 mp_start(void *dummy)
 {
 
+	printf("sysinit: mp_start()\n");
 	mtx_init(&smp_ipi_mtx, "smp rendezvous", NULL, MTX_SPIN);
+	printf("mp_start: initialize mutex\n");
 
 	/* Probe for MP hardware. */
 	if (smp_disabled != 0 || cpu_mp_probe() == 0) {
@@ -145,6 +148,7 @@ mp_start(void *dummy)
 		return;
 	}
 
+	printf("mp_start: do cpu_mp_start\n");
 	cpu_mp_start();
 	printf("FreeBSD/SMP: Multiprocessor System Detected: %d CPUs\n",
 	    mp_ncpus);
@@ -765,6 +769,7 @@ smp_rendezvous(void (*setup_func)(void *),
 static void
 mp_setvariables_for_up(void *dummy)
 {
+	printf("sysinit: mp_setvariables_for_up()\n");
 	mp_ncpus = 1;
 	mp_maxid = PCPU_GET(cpuid);
 	CPU_SETOF(mp_maxid, &all_cpus);
@@ -802,6 +807,7 @@ quiesce_cpus(cpuset_t map, const char *wmesg, int prio)
 			continue;
 		pcpu = pcpu_find(cpu);
 		gen[cpu] = pcpu->pc_idlethread->td_generation;
+		printf("gen[%d]: td_generation=%u\n", cpu, gen[cpu]);
 	}
 	for (cpu = 0; cpu <= mp_maxid; cpu++) {
 		if (!CPU_ISSET(cpu, &map) || CPU_ABSENT(cpu))
@@ -811,6 +817,7 @@ quiesce_cpus(cpuset_t map, const char *wmesg, int prio)
 		sched_bind(curthread, cpu);
 		thread_unlock(curthread);
 		while (gen[cpu] == pcpu->pc_idlethread->td_generation) {
+			printf("gen[%d]: do tsleep\n", cpu);
 			error = tsleep(quiesce_cpus, prio, wmesg, 1);
 			if (error != EWOULDBLOCK)
 				goto out;

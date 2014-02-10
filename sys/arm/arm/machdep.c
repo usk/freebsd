@@ -116,6 +116,11 @@ __FBSDID("$FreeBSD$");
 #define	debugf(fmt, args...)
 #endif
 
+#ifdef SOC_MV_ARMADAXP
+void mvUartPutc(unsigned char c);
+void mvUartPuts(unsigned char *s);
+#endif /* SOC_MV_ARMADAXP */
+
 struct pcpu __pcpu[MAXCPU];
 struct pcpu *pcpup = &__pcpu[0];
 
@@ -1054,16 +1059,20 @@ initarm(struct arm_boot_params *abp)
 	u_int l1pagetable;
 	int i, j, err_devmap, mem_regions_sz;
 
+	mvUartPutc('a');
 	lastaddr = parse_boot_param(abp);
 	arm_physmem_kernaddr = abp->abp_physaddr;
 
+	mvUartPutc('b');
 	memsize = 0;
 	set_cpufuncs();
 
 	/*
 	 * Find the dtb passed in by the boot loader.
 	 */
+	mvUartPutc('c');
 	kmdp = preload_search_by_type("elf kernel");
+	mvUartPutc('d');
 	if (kmdp != NULL)
 		dtbp = MD_FETCH(kmdp, MODINFOMD_DTBP, vm_offset_t);
 	else
@@ -1074,32 +1083,41 @@ initarm(struct arm_boot_params *abp)
 	 * In case the device tree blob was not retrieved (from metadata) try
 	 * to use the statically embedded one.
 	 */
+	mvUartPutc('e');
 	if (dtbp == (vm_offset_t)NULL)
 		dtbp = (vm_offset_t)&fdt_static_dtb;
 #endif
 
+	mvUartPutc('f');
 	if (OF_install(OFW_FDT, 0) == FALSE)
 		panic("Cannot install FDT");
 
+	mvUartPutc('g');
 	if (OF_init((void *)dtbp) != 0)
 		panic("OF_init failed with the found device tree");
 
 	/* Grab physical memory regions information from device tree. */
+	mvUartPutc('h');
 	if (fdt_get_mem_regions(mem_regions, &mem_regions_sz, &memsize) != 0)
 		panic("Cannot get physical memory regions");
+	mvUartPutc('i');
 	arm_physmem_hardware_regions(mem_regions, mem_regions_sz);
 
+	mvUartPutc('j');
 	/* Grab reserved memory regions information from device tree. */
 	if (fdt_get_reserved_regions(mem_regions, &mem_regions_sz) == 0)
 		arm_physmem_exclude_regions(mem_regions, mem_regions_sz, 
 		    EXFLAG_NODUMP | EXFLAG_NOALLOC);
 
 	/* Platform-specific initialisation */
+	mvUartPutc('k');
 	initarm_early_init();
 
+	mvUartPutc('l');
 	pcpu0_init();
 
 	/* Do basic tuning, hz etc */
+	mvUartPutc('m');
 	init_param1();
 
 	/* Calculate number of L2 tables needed for mapping vm_page_array */
@@ -1129,8 +1147,10 @@ initarm(struct arm_boot_params *abp)
 
 	while (((freemempos - L1_TABLE_SIZE) & (L1_TABLE_SIZE - 1)) != 0)
 		freemempos += PAGE_SIZE;
+	mvUartPutc('n');
 	valloc_pages(kernel_l1pt, L1_TABLE_SIZE / PAGE_SIZE);
 
+	mvUartPutc('o');
 	for (i = 0, j = 0; i < l2size; ++i) {
 		if (!(i % (PAGE_SIZE / L2_TABLE_SIZE_REAL))) {
 			valloc_pages(kernel_pt_table[i],
@@ -1150,17 +1170,25 @@ initarm(struct arm_boot_params *abp)
 	 * or 0xffff0000. This page will just contain the system vectors
 	 * and can be shared by all processes.
 	 */
+	mvUartPutc('p');
 	valloc_pages(systempage, 1);
 
 	/* Allocate dynamic per-cpu area. */
+	mvUartPutc('q');
 	valloc_pages(dpcpu, DPCPU_SIZE / PAGE_SIZE);
+	mvUartPutc('r');
 	dpcpu_init((void *)dpcpu.pv_va, 0);
 
 	/* Allocate stacks for all modes */
+	mvUartPutc('s');
 	valloc_pages(irqstack, IRQ_STACK_SIZE * MAXCPU);
+	mvUartPutc('t');
 	valloc_pages(abtstack, ABT_STACK_SIZE * MAXCPU);
+	mvUartPutc('u');
 	valloc_pages(undstack, UND_STACK_SIZE * MAXCPU);
+	mvUartPutc('v');
 	valloc_pages(kernelstack, KSTACK_PAGES * MAXCPU);
+	mvUartPutc('w');
 	valloc_pages(msgbufpv, round_page(msgbufsize) / PAGE_SIZE);
 
 	/*
@@ -1179,6 +1207,7 @@ initarm(struct arm_boot_params *abp)
 	 * and kernel structures
 	 */
 	l2_start = lastaddr & ~(L1_S_OFFSET);
+	mvUartPutc('x');
 	for (i = 0 ; i < l2size - 1; i++)
 		pmap_link_l2pt(l1pagetable, l2_start + i * L1_S_SIZE,
 		    &kernel_pt_table[i]);
@@ -1186,39 +1215,51 @@ initarm(struct arm_boot_params *abp)
 	pmap_curmaxkvaddr = l2_start + (l2size - 1) * L1_S_SIZE;
 
 	/* Map kernel code and data */
+	mvUartPutc('y');
 	pmap_map_chunk(l1pagetable, KERNVIRTADDR, abp->abp_physaddr,
 	   (((uint32_t)(lastaddr) - KERNVIRTADDR) + PAGE_MASK) & ~PAGE_MASK,
 	    VM_PROT_READ|VM_PROT_WRITE, PTE_CACHE);
 
+
 	/* Map L1 directory and allocated L2 page tables */
+	mvUartPutc('z');
 	pmap_map_chunk(l1pagetable, kernel_l1pt.pv_va, kernel_l1pt.pv_pa,
 	    L1_TABLE_SIZE, VM_PROT_READ|VM_PROT_WRITE, PTE_PAGETABLE);
 
+	mvUartPutc('0');
 	pmap_map_chunk(l1pagetable, kernel_pt_table[0].pv_va,
 	    kernel_pt_table[0].pv_pa,
 	    L2_TABLE_SIZE_REAL * l2size,
 	    VM_PROT_READ|VM_PROT_WRITE, PTE_PAGETABLE);
 
 	/* Map allocated DPCPU, stacks and msgbuf */
+	mvUartPutc('1');
 	pmap_map_chunk(l1pagetable, dpcpu.pv_va, dpcpu.pv_pa,
 	    freemempos - dpcpu.pv_va,
 	    VM_PROT_READ|VM_PROT_WRITE, PTE_CACHE);
 
 	/* Link and map the vector page */
+	mvUartPutc('2');
 	pmap_link_l2pt(l1pagetable, ARM_VECTORS_HIGH,
 	    &kernel_pt_table[l2size - 1]);
+	mvUartPutc('3');
 	pmap_map_entry(l1pagetable, ARM_VECTORS_HIGH, systempage.pv_pa,
 	    VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE, PTE_CACHE);
+	mvUartPutc('4');
 
 	/* Establish static device mappings. */
 	err_devmap = initarm_devmap_init();
 	arm_devmap_bootstrap(l1pagetable, NULL);
 	vm_max_kernel_address = initarm_lastaddr();
 
+	mvUartPutc('5');
 	cpu_domains((DOMAIN_CLIENT << (PMAP_DOMAIN_KERNEL * 2)) | DOMAIN_CLIENT);
 	pmap_pa = kernel_l1pt.pv_pa;
+	mvUartPutc('6');
 	setttb(kernel_l1pt.pv_pa);
+	mvUartPutc('7');
 	cpu_tlb_flushID();
+	mvUartPutc('8');
 	cpu_domains(DOMAIN_CLIENT << (PMAP_DOMAIN_KERNEL * 2));
 
 	/*
@@ -1231,18 +1272,23 @@ initarm(struct arm_boot_params *abp)
 	 * Only after the SOC registers block is mapped we can perform device
 	 * tree fixups, as they may attempt to read parameters from hardware.
 	 */
+	mvUartPutc('9');
 	OF_interpret("perform-fixup", 0);
 
+	mvUartPutc('!');
 	initarm_gpio_init();
 
+	mvUartPutc('"');
 	cninit();
 
 	debugf("initarm: console initialized\n");
 	debugf(" arg1 kmdp = 0x%08x\n", (uint32_t)kmdp);
 	debugf(" boothowto = 0x%08x\n", boothowto);
 	debugf(" dtbp = 0x%08x\n", (uint32_t)dtbp);
+	mvUartPutc('#');
 	print_kenv();
 
+	mvUartPutc('$');
 	env = getenv("kernelname");
 	if (env != NULL)
 		strlcpy(kernelname, env, sizeof(kernelname));
@@ -1251,6 +1297,7 @@ initarm(struct arm_boot_params *abp)
 		printf("WARNING: could not fully configure devmap, error=%d\n",
 		    err_devmap);
 
+	mvUartPutc('%');
 	initarm_late_init();
 
 	/*
@@ -1261,8 +1308,10 @@ initarm(struct arm_boot_params *abp)
 	 * Since the ARM stacks use STMFD etc. we must set r13 to the top end
 	 * of the stack memory.
 	 */
+	mvUartPutc('&');
 	cpu_control(CPU_CONTROL_MMU_ENABLE, CPU_CONTROL_MMU_ENABLE);
 
+	mvUartPutc('\'');
 	set_stackptrs(0);
 
 	/*
@@ -1275,17 +1324,26 @@ initarm(struct arm_boot_params *abp)
 	 * After booting there are no gross relocations of the kernel thus
 	 * this problem will not occur after initarm().
 	 */
+	mvUartPutc('(');
 	cpu_idcache_wbinv_all();
 
+	mvUartPutc(')');
 	undefined_init();
 
+	mvUartPutc('~');
 	init_proc0(kernelstack.pv_va);
 
+	mvUartPutc('-');
 	arm_intrnames_init();
+	mvUartPutc('=');
 	arm_vector_init(ARM_VECTORS_HIGH, ARM_VEC_ALL);
+	mvUartPutc('^');
 	pmap_bootstrap(freemempos, &kernel_l1pt);
+	mvUartPutc('~');
 	msgbufp = (void *)msgbufpv.pv_va;
+	mvUartPutc('\\');
 	msgbufinit(msgbufp, msgbufsize);
+	mvUartPutc('|');
 	mutex_init();
 
 	/*
@@ -1296,14 +1354,39 @@ initarm(struct arm_boot_params *abp)
 	 *
 	 * Prepare the list of physical memory available to the vm subsystem.
 	 */
+	mvUartPutc(',');
 	arm_physmem_exclude_region(abp->abp_physaddr, 
 	    (virtual_avail - KERNVIRTADDR), EXFLAG_NOALLOC);
 	arm_physmem_init_kernel_globals();
 
+	mvUartPutc('<');
 	init_param2(physmem);
+	mvUartPutc('.');
 	kdb_init();
 
+	mvUartPutc('>');
 	return ((void *)(kernelstack.pv_va + USPACE_SVC_STACK_TOP -
 	    sizeof(struct pcb)));
 }
 #endif
+
+#ifdef SOC_MV_ARMADAXP
+void
+mvUartPutc(unsigned char c)
+{
+	volatile unsigned char *pUartPortTHR = (volatile unsigned char*)0xf1012000;
+	volatile unsigned char *pUartPortLSR = pUartPortTHR + 0x14;
+	while ((*pUartPortLSR & 0x20) == 0) ;
+	*pUartPortTHR = c;
+}
+
+void
+mvUartPuts(unsigned char *s)
+{
+	while (*s != '\0') {
+		mvUartPutc(*s);
+		if (*s == '\n') mvUartPutc('\r');
+		++s;
+	}
+}
+#endif /* SOC_MV_ARMADAXP */

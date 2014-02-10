@@ -113,6 +113,7 @@ cpu_mp_start(void)
 	vm_offset_t temp_pagetable_va;
 	vm_paddr_t addr, addr_end;
 
+	printf("cpu_mp_start: initialize mutex\n");
 	mtx_init(&ap_boot_mtx, "ap boot", NULL, MTX_SPIN);
 
 	/* Reserve memory for application processors */
@@ -136,18 +137,23 @@ cpu_mp_start(void)
 
 #if defined(CPU_MV_PJ4B)
 	/* Add ARMADAXP registers required for snoop filter initialization */
+	printf("cpu_mp_start: add AXP registers\n");
 	((int *)(temp_pagetable_va))[MV_BASE >> L1_S_SHIFT] =
 	    L1_TYPE_S|L1_SHARED|L1_S_B|L1_S_AP(AP_KRW)|fdt_immr_pa;
 #endif
 
 	temp_pagetable = (void*)(vtophys(temp_pagetable_va));
+	printf("cpu_mp_start: do cpu_idcache_wbinv_all()\n");
 	cpu_idcache_wbinv_all();
+	printf("cpu_mp_start: do cpu_l2cache_wbinv_all()\n");
 	cpu_l2cache_wbinv_all();
 
 	/* Initialize boot code and start up processors */
+	printf("cpu_mp_start: do platform_mp_start_ap()\n");
 	platform_mp_start_ap();
 
 	/*  Check if ap's started properly */
+	printf("cpu_mp_start: do check_ap()\n");
 	error = check_ap();
 	if (error)
 		printf("WARNING: Some AP's failed to start\n");
@@ -155,6 +161,7 @@ cpu_mp_start(void)
 		for (i = 1; i < mp_ncpus; i++)
 			CPU_SET(i, &all_cpus);
 
+	printf("cpu_mp_start: do contigfree()\n");
 	contigfree((void *)temp_pagetable_va, L1_TABLE_SIZE, M_TEMP);
 }
 

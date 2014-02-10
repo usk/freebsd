@@ -87,6 +87,7 @@ platform_mp_probe(void)
 {
 
 	mp_ncpus = platform_get_ncpus();
+	printf("platform_mp_probe: mp_ncpus=%d\n", mp_ncpus);
 
 	return (mp_ncpus > 1);
 }
@@ -116,14 +117,20 @@ platform_mp_start_ap(void)
 	pmap_kenter_nocache(smp_boot, 0xffff0000);
 	dst = (uint32_t *) smp_boot;
 
+	printf("platform_mp_start_ap: mp_ncpus=%d\n", mp_ncpus);
+	printf("platform_mp_start_ap: dst=%p\n", dst);
+	printf("platform_mp_start_ap: mptramp=%p\n", (uint32_t *)mptramp);
+	printf("platform_mp_start_ap: mpentry=%p\n", (uint32_t *)mpentry);
 	for (src = (uint32_t *)mptramp; src < (uint32_t *)mpentry;
 	    src++, dst++) {
+		printf("platform_mp_start_ap: dst=%p, src=%p\n", dst, src);
 		*dst = *src;
 	}
 	kva_free(smp_boot, PAGE_SIZE);
 
 	if (cputype == CPU_ID_MV88SV584X_V7) {
 		/* Core rev A0 */
+		printf("platform_mp_start_ap: Core rev A0\n");
 		div_val = read_cpu_clkdiv(CPU_DIVCLK_CTRL2_RATIO_FULL1);
 		div_val &= 0x3f;
 
@@ -135,6 +142,7 @@ platform_mp_start_ap(void)
 		}
 	} else {
 		/* Core rev Z1 */
+		printf("platform_mp_start_ap: Core rev Z1\n");
 		div_val = 0x01;
 
 		if (mp_ncpus > 1) {
@@ -170,6 +178,7 @@ platform_mp_start_ap(void)
 		bus_space_write_4(fdtbus_bs_tag, CPU_PMU(cpu_num), CPU_PMU_BOOT,
 		    pmap_kextract((vm_offset_t)mpentry));
 
+	printf("platform_mp_start_ap: cpu_idcache_wbinv_all()\n");
 	cpu_idcache_wbinv_all();
 
 	for (cpu_num = 1; cpu_num < mp_ncpus; cpu_num++ )
@@ -179,6 +188,7 @@ platform_mp_start_ap(void)
 	wmb();
 	DELAY(10);
 
+	printf("platform_mp_start_ap: armadaxp_init_coher_fabric()\n");
 	armadaxp_init_coher_fabric();
 }
 

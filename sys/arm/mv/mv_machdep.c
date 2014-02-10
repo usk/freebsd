@@ -72,6 +72,11 @@ void armadaxp_l2_init(void);
 #define MPP_SEL(pin,func)	(((func) & 0xf) <<		\
     (((pin) % MPP_PINS_PER_REG) * 4))
 
+#ifdef SOC_MV_ARMADAXP
+void mvUartPutc(unsigned char c);
+void mvUartPuts(unsigned char *s);
+#endif /* SOC_MV_ARMADAXP */
+
 static int
 platform_mpp_init(void)
 {
@@ -234,19 +239,24 @@ initarm_late_init(void)
 	 * Re-initialise decode windows
 	 */
 #if !defined(SOC_MV_FREY)
+	mvUartPuts("soc_decode_win()\n");
 	if (soc_decode_win() != 0)
 		printf("WARNING: could not re-initialise decode windows! "
 		    "Running with existing settings...\n");
 #else
 	/* Disable watchdog and timers */
+	mvUartPuts("disable watchdog and timers\n");
 	write_cpu_ctrl(CPU_TIMERS_BASE + CPU_TIMER_CONTROL, 0);
 #endif
 #if defined(SOC_MV_ARMADAXP)
 #if !defined(SMP)
 	/* For SMP case it should be initialized after APs are booted */
+	mvUartPuts("armadaxp_init_coher_fabric()\n");
 	armadaxp_init_coher_fabric();
 #endif
+	mvUartPuts("armadaxp_l2_init()\n");
 	armadaxp_l2_init();
+	mvUartPuts("armadaxp_l2_init() done\n");
 #endif
 }
 
