@@ -338,28 +338,6 @@ Lstartup_pagetable_secondary:
 	.word	temp_pagetable
 #endif
 
-#if 0
-mmu_init_table:
-	/* fill all table VA==PA */
-	/* map SDRAM VA==PA, WT cacheable */
-#if !defined(SMP)
-	MMU_INIT(PHYSADDR, PHYSADDR , 64, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
-	/* map VA 0xc0000000..0xc3ffffff to PA */
-	MMU_INIT(KERNBASE, PHYSADDR, 64, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
-#if defined(CPU_MV_PJ4B)
-	/* map VA 0xf1000000..0xf1100000 to PA 0xd0000000 */
-	MMU_INIT(0xf1000000, 0xd0000000, 1, L1_TYPE_S|L1_S_C|L1_S_AP(AP_KRW))
-#endif /* CPU_MV_PJ4B */
-#else
-	MMU_INIT(PHYSADDR, PHYSADDR , 64, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
-	/* map VA 0xc0000000..0xc3ffffff to PA */
-	MMU_INIT(KERNBASE, PHYSADDR, 64, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
-	MMU_INIT(0x48000000, 0x48000000, 1, L1_TYPE_S|L1_SHARED|L1_S_C|L1_S_AP(AP_KRW))
-#endif /* SMP */
-	.word 0	/* end of table */
-#endif
-#endif
-
 .Lstart:
 	.word	_edata
 	.word	_ebss

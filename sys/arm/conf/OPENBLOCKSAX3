@@ -27,6 +27,8 @@ options 	SCSI_DELAY=5000			# Delay (in ms) before probing SCSI
 # Debugging
 #options 	BOOTVERBOSE=1
 #options 	VERBOSE_SYSINIT
+options 	SOCDEV_VA=0xf1000000		# Marvell SoC's INTER_REGS_BASE (virtual) for early printf
+options 	SOCDEV_PA=0xd0000000		# Marvell SoC's INTER_REGS_BASE (physical) for early printf
 
 # USB
 device		cdce				# Generic USB over Ethernet
