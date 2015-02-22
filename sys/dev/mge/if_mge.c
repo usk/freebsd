@@ -1397,6 +1397,12 @@ mge_probe(device_t dev)
 	if (!ofw_bus_is_compatible(dev, "mrvl,ge"))
 		return (ENXIO);
 
+#if 0
+	/* Use mvneta driver */
+	if (ofw_bus_has_prop(dev, "has-neta"))
+		return (ENXIO);
+#endif
+
 	device_set_desc(dev, "Marvell Gigabit Ethernet controller");
 	return (BUS_PROBE_DEFAULT);
 }
