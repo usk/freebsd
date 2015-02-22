@@ -367,6 +367,7 @@ soc_power_ctrl_set(uint32_t mask)
 void
 soc_id(uint32_t *dev, uint32_t *rev)
 {
+	phandle_t node;
 
 	/*
 	 * Notice: system identifiers are available in the registers range of
@@ -376,6 +377,18 @@ soc_id(uint32_t *dev, uint32_t *rev)
 	 */
 	*dev = bus_space_read_4(fdtbus_bs_tag, MV_PCIE_BASE, 0) >> 16;
 	*rev = bus_space_read_4(fdtbus_bs_tag, MV_PCIE_BASE, 8) & 0xff;
+
+	/*
+	 * Workaround for Marvell Armada XP MV78260 A0: Fix SoC ID because
+	 * PCIE controller on MV78260 A0 returns MV_DEV_MV78460.
+	 */
+	if (*dev != MV_DEV_MV78460)
+		return;
+	node = OF_finddevice("/");
+	if (node == -1)
+		return;
+	if (fdt_is_compatible(node, "mrvl,DB-78260"))
+		*dev = MV_DEV_MV78260;
 }
 
 static void
@@ -2161,6 +2174,8 @@ struct fdt_fixup_entry fdt_fixup_table[] = {
 	{ "mrvl,DB-88F6281", &fdt_fixup_busfreq },
 	{ "mrvl,DB-78460", &fdt_fixup_busfreq },
 	{ "mrvl,DB-78460", &fdt_fixup_ranges },
+	{ "mrvl,DB-78260", &fdt_fixup_busfreq },
+	{ "mrvl,DB-78260", &fdt_fixup_ranges },
 	{ NULL, NULL }
 };
 
