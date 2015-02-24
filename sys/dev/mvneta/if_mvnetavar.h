@@ -1,15 +1,16 @@
 #ifndef __IF_MVNETA_H__
 #define __IF_MVNETA_H__
 
-#define MVNETA_RXQ_NUM_PER_PORT	8
-#define MVNETA_TXQ_NUM_PER_PORT	8
-#define MVNETA_TX_DESC_NUM		256
-#define MVNETA_RX_DESC_NUM		256
-#define MVNETA_IDMA_NUM			4
-#define MVNETA_IDMA_MAX_SIZE	(16 * 1024 * 1024)
-#define MVNETA_BMU_NUM_BUFPOOL	4
-#define MVNETA_LONGFRAME_SIZE	9700
-#define MVNETA_SHORTFRAME_SIZE	64
+#define MVNETA_TXQ_COUNT			8					/* Number of TX queues per port */
+#define MVNETA_RXQ_COUNT			8					/* Number of RX queues per port */
+#define MVNETA_TX_DESC_COUNT		256					/* Number of TX descriptors per port */
+#define MVNETA_RX_DESC_COUNT		256					/* Number of RX descriptors per port */
+#define MVNETA_IDMA_COUNT			4
+#define MVNETA_IDMA_MAX_SIZE		(16 * 1024 * 1024)
+#define MVNETA_BMU_BUFPOOL_COUNT	4
+#define MVNETA_LONGFRAME_SIZE		9700
+#define MVNETA_SHORTFRAME_SIZE		64
+#define MVNETA_INTR_COUNT			5					/* XXX: correct? */
 
 struct mvneta_tx_desc {
 	uint32_t	command;		/* Options used by H/W */
@@ -31,6 +32,14 @@ struct mvneta_rx_desc {
 
 struct mvneta_softc {
 	device_t	dev;
+	phandle_t	node;
+
+	struct mvneta_softc *phy_sc;
+
+	struct resource	*res[1 + MVNETA_INTR_COUNT];
+	struct mtx	tx_lock;
+	struct mtx	rx_lock;
+
 	struct mvneta_tx_desc		*tx_desc;
 	struct mvneta_desc_wrapper	*rx_desc;
 };

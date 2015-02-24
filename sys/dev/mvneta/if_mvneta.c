@@ -103,9 +103,27 @@ static int
 mvneta_attach(device_t dev)
 {
 	struct mvneta_softc *sc;
+	int phy;
 
 	sc = device_get_softc(dev);
 	sc->dev = dev;
+	sc->node = ofw_bus_get_node(dev);
+
+	/* Get phy address and used softc from fdt */
+	if (fdt_get_phyaddr(sc->node, sc->dev, &phy, (void **)&sc->phy_sc) != 0)
+		return (ENXIO);
+
+	/* Initialize mutexes */
+	mtx_init(&sc->tx_lock, device_get_nameunit(dev), "mvneta TX lock", MTX_DEF);
+	mtx_init(&sc->rx_lock, device_get_nameunit(dev), "mvneta RX lock", MTX_DEF);
+
+	/* Allocate IO and IRQ resources */
+	error = bus_alloc_resources(dev, res_spec, sc->res);
+	if (error) {
+		device_printf(dev, "could not allocate resources\n");
+		mvneta_detach(dev);
+		return (ENXIO);
+	}
 
 	return (0);
 }
