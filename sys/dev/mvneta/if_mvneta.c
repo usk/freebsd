@@ -39,7 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
 
-#include <dev/mge/if_mvnetavar.h>
+#include <dev/mvneta/if_mvnetavar.h>
 #include <arm/mv/mvreg.h>
 #include <arm/mv/mvvar.h>
 
@@ -54,6 +54,9 @@ static int mvneta_resume(device_t dev);
 
 static int mvneta_miibus_readreg(device_t dev, int phy, int reg);
 static int mvneta_miibus_writereg(device_t dev, int phy, int reg, int value);
+
+static void mvneta_intr_rx(void *arg);
+static void mvneta_intr_tx(void *arg);
 
 static device_method_t mvneta_methods[] = {
 	/* Device interface */
@@ -81,6 +84,21 @@ DRIVER_MODULE(mvneta, simplebus, mvneta_driver, mvneta_devclass, 0, 0);
 DRIVER_MODULE(miibus, mvneta, miibus_driver, miibus_devclass, 0, 0);
 MODULE_DEPEND(mvneta, ether, 1, 1, 1);
 MODULE_DEPEND(mvneta, miibus, 1, 1, 1);
+
+static struct resource_spec res_spec[] = {
+	{ SYS_RES_MEMORY, 0, RF_ACTIVE },				/* MVNETA_READ, MVNETA_WRITE */
+	{ SYS_RES_IRQ, 0, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_rx */
+	{ SYS_RES_IRQ, 1, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_tx */
+	{ -1, 0 }
+};
+
+static struct {
+	driver_intr_t *handler;
+	char * description;
+} mvneta_intrs[MVNETA_INTR_COUNT] = {
+	{ mvneta_intr_rx,	"GbE receive interrupt" },
+	{ mvneta_intr_tx,	"GbE transmit interrupt" },
+};
 
 static int
 mvneta_probe(device_t dev)
@@ -125,15 +143,26 @@ mvneta_attach(device_t dev)
 		return (ENXIO);
 	}
 
+	/* Attach interrupt handlers */
+	for (i = 1; i <= sc->mvneta_intr_cnt; ++i) {
+		error = bus_setup_intr(dev, sc->res[i],
+		    INTR_TYPE_NET | INTR_MPSAFE,
+		    NULL, *mge_intrs[(sc->mge_intr_cnt == 1 ? 0 : i)].handler,
+		    sc, &sc->ih_cookie[i - 1]);
+		if (error) {
+			device_printf(dev, "could not setup %s\n",
+			    mge_intrs[(sc->mge_intr_cnt == 1 ? 0 : i)].description);
+			mge_detach(dev);
+			return (error);
+		}
+	}
+
 	return (0);
 }
 
 static int
 mvneta_detach(device_t dev)
 {
-	struct mvneta_softc *sc;
-
-	sc = device_get_softc(dev);
 
 	return (0);
 }
@@ -141,9 +170,6 @@ mvneta_detach(device_t dev)
 static int
 mvneta_shutdown(device_t dev)
 {
-	struct mvneta_softc *sc;
-
-	sc = device_get_softc(dev);
 
 	return (0);
 }
@@ -152,7 +178,6 @@ static int
 mvneta_suspend(device_t dev)
 {
 
-	device_printf(dev, "%s\n", __FUNCTION__);
 	return (0);
 }
 
@@ -160,16 +185,12 @@ static int
 mvneta_resume(device_t dev)
 {
 
-	device_printf(dev, "%s\n", __FUNCTION__);
 	return (0);
 }
 
 static int
 mvneta_miibus_readreg(device_t dev, int phy, int reg)
 {
-	struct mvneta_softc *sc;
-
-	sc = device_get_softc(dev);
 
 	return (0);
 }
@@ -177,9 +198,20 @@ mvneta_miibus_readreg(device_t dev, int phy, int reg)
 static int
 mvneta_miibus_writereg(device_t dev, int phy, int reg, int value)
 {
-	struct mvneta_softc *sc;
-
-	sc = device_get_softc(dev);
 
 	return (0);
+}
+
+static void
+mvneta_intr_rx(void *arg)
+{
+
+	return;
+}
+
+static void
+mvneta_intr_tx(void *arg)
+{
+
+	return;
 }
