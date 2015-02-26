@@ -221,7 +221,7 @@
 			compatible = "mrvl,ge";
 			reg = <0x72000 0x2000>;
 			ranges = <0x0 0x72000 0x2000>;
-			interrupts = <67 68 122 >;
+			interrupts = <67 68 122 >;		// valid interrupt range is 0-115. 0-28 are private per CPU. see also p140.
 			interrupt-parent = <&MPIC>;
 			phy-handle = <&phy0>;
 			has-neta;
@@ -245,6 +245,100 @@
 				};
 			};
 		};
+
+/*
+		enet0: ethernet@70000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			model = "V2";
+			compatible = "mrvl,ge";
+			reg = <0x70000 0x2000>;
+			ranges = <0x0 0x70000 0x2000>;
+			interrupts = <9>;				// RX and TX
+			interrupt-parent = <&MPIC>;
+			phy-handle = <&phy0>;
+			has-neta;
+
+			mdio@0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "mrvl,mdio";
+
+				phy0: ethernet-phy@0 {
+					reg = <0x0>;
+				};
+			};
+		};
+
+		enet1: ethernet@74000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			model = "V2";
+			compatible = "mrvl,ge";
+			reg = <0x74000 0x2000>;
+			ranges = <0x0 0x74000 0x2000>;
+			interrupts = <11>;				// RX and TX
+			interrupt-parent = <&MPIC>;
+			phy-handle = <&phy1>;
+			has-neta;
+
+			mdio@0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "mrvl,mdio";
+
+				phy1: ethernet-phy@0 {
+					reg = <0x0>;
+				};
+			};
+		};
+
+		enet2: ethernet@30000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			model = "V2";
+			compatible = "mrvl,ge";
+			reg = <0x30000 0x2000>;
+			ranges = <0x0 0x30000 0x2000>;
+			interrupts = <13>;				// RX and TX
+			interrupt-parent = <&MPIC>;
+			phy-handle = <&phy2>;
+			has-neta;
+
+			mdio@0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "mrvl,mdio";
+
+				phy2: ethernet-phy@0 {
+					reg = <0x0>;
+				};
+			};
+		};
+
+		enet3: ethernet@34000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			model = "V2";
+			compatible = "mrvl,ge";
+			reg = <0x34000 0x2000>;
+			ranges = <0x0 0x34000 0x2000>;
+			interrupts = <15>;				// RX and TX
+			interrupt-parent = <&MPIC>;
+			phy-handle = <&phy3>;
+			has-neta;
+
+			mdio@0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "mrvl,mdio";
+
+				phy3: ethernet-phy@0 {
+					reg = <0x0>;
+				};
+			};
+		};
+*/
 
 		sata@A0000 {
 			compatible = "mrvl,sata";

@@ -16,7 +16,7 @@ struct mvneta_tx_desc {
 	uint32_t	command;		/* Options used by H/W */
 	uint16_t	reserved0;
 	uint16_t	size;			/* Payload size in bytes */
-	bus_addr_t	buf_pa;			/* Physical address of TX buffer */
+	uint32_t	buf_pa;			/* Physical address of TX buffer */
 	uint32_t	reserved1[5];
 };
 
@@ -24,9 +24,9 @@ struct mvneta_rx_desc {
 	uint32_t	status;			/* Received packet status */
 	uint16_t	reserved0;
 	uint16_t	size;			/* Payload size in bytes */
-	bus_addr_t	buf_pa;			/* Physical address of RX buffer */
+	uint32_t	buf_pa;			/* Physical address of RX buffer */
 	uint32_t	reserved1;
-	bus_addr_t	buf_va;			/* Virtual address of RX buffer */
+	uint32_t	buf_va;			/* Virtual address of RX buffer */
 	uint32_t	reserved2[4];
 };
 
