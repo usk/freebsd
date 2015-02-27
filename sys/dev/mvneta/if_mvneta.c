@@ -87,7 +87,7 @@ MODULE_DEPEND(mvneta, ether, 1, 1, 1);
 MODULE_DEPEND(mvneta, miibus, 1, 1, 1);
 
 static struct resource_spec res_spec[] = {
-	{ SYS_RES_MEMORY, 0, RF_ACTIVE },				/* MVNETA_READ, MVNETA_WRITE */
+	{ SYS_RES_MEMORY, 0, RF_ACTIVE },		/* MVNETA_READ, MVNETA_WRITE */
 	{ SYS_RES_IRQ, 0, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_rxtx */
 	{ -1, 0 }
 };
