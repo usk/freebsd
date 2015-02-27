@@ -55,6 +55,7 @@ static int mvneta_resume(device_t dev);
 static int mvneta_miibus_readreg(device_t dev, int phy, int reg);
 static int mvneta_miibus_writereg(device_t dev, int phy, int reg, int value);
 
+static void mvneta_intr_rxtx(void *arg);
 static void mvneta_intr_rx(void *arg);
 static void mvneta_intr_tx(void *arg);
 
@@ -198,6 +199,13 @@ mvneta_miibus_writereg(device_t dev, int phy, int reg, int value)
 {
 
 	return (0);
+}
+
+static void
+mvneta_intr_rxtx(void *arg)
+{
+
+	return;
 }
 
 static void
