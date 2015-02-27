@@ -10,7 +10,7 @@
 #define MVNETA_BMU_BUFPOOL_COUNT	4
 #define MVNETA_LONGFRAME_SIZE		9700
 #define MVNETA_SHORTFRAME_SIZE		64
-#define MVNETA_INTR_COUNT			2					/* TX/RX */
+#define MVNETA_INTR_COUNT			1					/* RX/TX (aggregated) */
 
 struct mvneta_tx_desc {
 	uint32_t	command;		/* Options used by H/W */

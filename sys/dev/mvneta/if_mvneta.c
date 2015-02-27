@@ -87,8 +87,7 @@ MODULE_DEPEND(mvneta, miibus, 1, 1, 1);
 
 static struct resource_spec res_spec[] = {
 	{ SYS_RES_MEMORY, 0, RF_ACTIVE },				/* MVNETA_READ, MVNETA_WRITE */
-	{ SYS_RES_IRQ, 0, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_rx */
-	{ SYS_RES_IRQ, 1, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_tx */
+	{ SYS_RES_IRQ, 0, RF_ACTIVE | RF_SHAREABLE },	/* mvneta_intr_rxtx */
 	{ -1, 0 }
 };
 
@@ -96,8 +95,7 @@ static struct {
 	driver_intr_t *handler;
 	char * description;
 } mvneta_intrs[MVNETA_INTR_COUNT] = {
-	{ mvneta_intr_rx,	"GbE receive interrupt" },
-	{ mvneta_intr_tx,	"GbE transmit interrupt" },
+	{ mvneta_intr_rxtx,	"GbE aggregated interrupt" },
 };
 
 static int
@@ -114,7 +112,7 @@ mvneta_probe(device_t dev)
 		return (ENXIO);
 
 	device_set_desc(dev, "Marvell NETA Gigabit Ethernet controller");
-	return (BUS_PROBE_DEFAULT);
+	return (BUS_PROBE_SPECIFIC);
 }
 
 static int
