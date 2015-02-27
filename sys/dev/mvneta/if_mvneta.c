@@ -146,12 +146,12 @@ mvneta_attach(device_t dev)
 	for (i = 1; i <= sc->mvneta_intr_cnt; ++i) {
 		error = bus_setup_intr(dev, sc->res[i],
 		    INTR_TYPE_NET | INTR_MPSAFE,
-		    NULL, *mge_intrs[(sc->mge_intr_cnt == 1 ? 0 : i)].handler,
+		    NULL, *mvneta_intrs[(sc->mvneta_intr_cnt == 1 ? 0 : i)].handler,
 		    sc, &sc->ih_cookie[i - 1]);
 		if (error) {
 			device_printf(dev, "could not setup %s\n",
-			    mge_intrs[(sc->mge_intr_cnt == 1 ? 0 : i)].description);
-			mge_detach(dev);
+			    mvneta_intrs[(sc->mvneta_intr_cnt == 1 ? 0 : i)].description);
+			mvneta_detach(dev);
 			return (error);
 		}
 	}
