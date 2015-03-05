@@ -12,6 +12,8 @@
 #define MVNETA_SHORTFRAME_SIZE		64
 #define MVNETA_INTR_COUNT		1			/* RX/TX (aggregated) */
 
+#define MVNETA_CHECKSUM_FEATURES	(CSUM_IP | CSUM_TCP | CSUM_UDP)
+
 struct mvneta_tx_desc {
 	uint32_t	command;	/* Options used by H/W */
 	uint16_t	reserved0;
@@ -31,12 +33,18 @@ struct mvneta_rx_desc {
 };
 
 struct mvneta_softc {
-	device_t	dev;
+	struct ifnet	*ifp;		/* per-interface network data */
+
 	phandle_t	node;
+
+	device_t	dev;
 
 	struct resource	*res[1 + MVNETA_INTR_COUNT];
 	struct mtx	tx_lock;
 	struct mtx	rx_lock;
+
+	struct callout	wd_callout;
+	int		wd_timer;
 
 	struct mvneta_rx_desc		*rx_desc;
 	struct mvneta_tx_desc		*tx_desc;

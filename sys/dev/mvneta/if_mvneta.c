@@ -55,9 +55,12 @@ static int mvneta_resume(device_t dev);
 static int mvneta_miibus_readreg(device_t dev, int phy, int reg);
 static int mvneta_miibus_writereg(device_t dev, int phy, int reg, int value);
 
+static void mvneta_init(void *arg);
+static void mvneta_start(struct ifnet *ifp);
+static int mvneta_ioctl(struct ifnet *ifp, u_long command, caddr_t data);
+
 static void mvneta_intr_rxtx(void *arg);
-static void mvneta_intr_rx(void *arg);
-static void mvneta_intr_tx(void *arg);
+static void mvneta_get_mac_address(struct mvneta_softc *sc, uint8_t *addr);
 
 static device_method_t mvneta_methods[] = {
 	/* Device interface */
@@ -142,8 +145,44 @@ mvneta_attach(device_t dev)
 		return (ENXIO);
 	}
 
+	/* Allocate DMA, buffers, buffer descriptors */
+	/* WIP */
+
+	/* Allocate network interface */
+	ifp = sc->ifp = if_alloc(IFT_ETHER);
+	if (ifp == NULL) {
+		device_printf(dev, "if_alloc() failed\n");
+		mvneta_detach(dev);
+		return (ENOMEM);
+	}
+
+	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
+	ifp->if_softc = sc;
+	ifp->if_flags = IFF_SIMPLEX | IFF_MULTICAST | IFF_BROADCAST;
+	ifp->if_capabilities = IFCAP_VLAN_MTU | IFCAP_HWCSUM;
+	ifp->if_hwassist = MVNETA_CHECKSUM_FEATURES;
+	ifp->if_capenable = ifp->if_capabilities;
+
+	ifp->if_init = mvneta_init;
+	ifp->if_start = mvneta_start;
+	ifp->if_ioctl = mvneta_ioctl;
+
+	ifp->if_snd.ifq_drv_maxlen = MVNETA_TX_DESC_COUNT - 1;
+	IFQ_SET_MAXLEN(&ifp->if_snd, ifp->if_snd.ifq_drv_maxlen);
+	IFQ_SET_READY(&ifp->if_snd);
+
+	mvneta_get_mac_address(sc, hwaddr);
+	ether_ifattach(ifp, hwaddr);
+	callout_init(&sc->wd_callout, 0);
+
+	/* Attach PHY(s) */
+	/* WIP */
+
+	/* Tell the MAC where to find the PHY so autoneg works */
+	/* WIP */
+
 	/* Attach interrupt handlers */
-	for (i = 1; i <= sc->mvneta_intr_cnt; ++i) {
+	for (i = 1; i <= MVNETA_INTR_COUNT; ++i) {
 		error = bus_setup_intr(dev, sc->res[i],
 		    INTR_TYPE_NET | INTR_MPSAFE,
 		    NULL, *mvneta_intrs[(sc->mvneta_intr_cnt == 1 ? 0 : i)].handler,
@@ -209,14 +248,7 @@ mvneta_intr_rxtx(void *arg)
 }
 
 static void
-mvneta_intr_rx(void *arg)
-{
-
-	return;
-}
-
-static void
-mvneta_intr_tx(void *arg)
+mvneta_get_mac_address(struct mvneta_softc *sc, uint8_t *addr)
 {
 
 	return;
