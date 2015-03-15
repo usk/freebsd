@@ -61,6 +61,7 @@ static int mvneta_ioctl(struct ifnet *ifp, u_long command, caddr_t data);
 
 static void mvneta_intr_rxtx(void *arg);
 static void mvneta_get_mac_address(struct mvneta_softc *sc, uint8_t *addr);
+static int mvneta_allocate_dma(struct mvneta_softc *sc);
 
 static device_method_t mvneta_methods[] = {
 	/* Device interface */
@@ -123,6 +124,7 @@ static int
 mvneta_attach(device_t dev)
 {
 	struct mvneta_softc *sc;
+	struct ifnet *ifp;
 	int phy;
 
 	sc = device_get_softc(dev);
@@ -146,7 +148,11 @@ mvneta_attach(device_t dev)
 	}
 
 	/* Allocate DMA, buffers, buffer descriptors */
-	/* WIP */
+	error = mvneta_allocate_dma(sc);
+	if (error) {
+		mvneta_detach(dev);
+		return (ENXIO);
+	}
 
 	/* Allocate network interface */
 	ifp = sc->ifp = if_alloc(IFT_ETHER);
@@ -252,4 +258,11 @@ mvneta_get_mac_address(struct mvneta_softc *sc, uint8_t *addr)
 {
 
 	return;
+}
+
+static int
+mvneta_allocate_dma(struct mvneta_softc *sc)
+{
+
+	return (0);
 }
