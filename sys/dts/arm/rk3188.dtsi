@@ -123,6 +123,46 @@
 			clock-frequency = < 66000000 >;
 		};
 
+		i2c0: iic@0x2002c000 {
+			compatible = "rockchip,rk30xx-i2c";
+			reg = <0x2002c000 0x2000>;
+			interrupts = <72>;
+			interrupt-parent = <&GIC>;
+			status = "disabled";
+		};
+
+		i2c1: iic@0x2002e000 {
+			compatible = "rockchip,rk30xx-i2c";
+			reg = <0x2002e000 0x2000>;
+			interrupts = <73>;
+			interrupt-parent = <&GIC>;
+			status = "disabled";
+		};
+
+		i2c2: iic@0x20054000 {
+			compatible = "rockchip,rk30xx-i2c";
+			reg = <0x20054000 0x4000>;
+			interrupts = <74>;
+			interrupt-parent = <&GIC>;
+			status = "disabled";
+		};
+
+		i2c3: iic@0x20058000 {
+			compatible = "rockchip,rk30xx-i2c";
+			reg = <0x20058000 0x4000>;
+			interrupts = <75>;
+			interrupt-parent = <&GIC>;
+			status = "disabled";
+		};
+
+		i2c4: iic@0x2005c000 {
+			compatible = "rockchip,rk30xx-i2c";
+			reg = <0x2005c000 0x4000>;
+			interrupts = <84>;
+			interrupt-parent = <&GIC>;
+			status = "disabled";
+		};
+
 		gpio0: gpio@2000a000 {
 			compatible = "rockchip,rk30xx-gpio";
 			gpio-controller;
@@ -251,4 +291,3 @@
 		};
 	};
 };
-
