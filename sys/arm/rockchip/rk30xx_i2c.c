@@ -78,14 +78,98 @@ DRIVER_MODULE(i2c, simplebus, i2c_driver, i2c_devclass, 0, 0);
 DRIVER_MODULE(iicbus, i2c, iicbus_driver, iicbus_devclass, 0, 0);
 MODULE_DEPEND(i2c, iicbus, 1, 1, 1);
 
-static int i2c_probe(device_t d) { return 0; }
-static int i2c_attach(device_t d) { return 0; }
+static struct ofw_compat_data compat_data[] = {
+	{"rockchip,rk30xx-i2c", 1},
+	{NULL,                  0}
+};
 
-static phandle_t i2c_get_node(device_t d, device_t d_) { return 0; }
+static int
+i2c_probe(device_t dev)
+{
+	struct i2c_softc *sc;
 
-static int i2c_repeated_start(device_t d, u_char c, int i) { return 0; }
-static int i2c_start(device_t d, u_char c, int i) { return 0; }
-static int i2c_stop(device_t d) { return 0; }
-static int i2c_reset(device_t d, u_char c, u_char c_, u_char *c__) { return 0; }
-static int i2c_read(device_t d, char *c, int i, int *j, int k, int m) { return 0; }
-static int i2c_write(device_t d, const char *c, int i, int *j, int k) { return 0; }
+	if (!ofw_bus_status_okay(dev))
+		return (ENXIO);
+
+	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0)
+		return (ENXIO);
+
+	sc = device_get_softc(dev);
+	sc->rid = 0;
+
+	sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->rid,
+	    RF_ACTIVE);
+	if (sc->res == NULL) {
+		device_printf(dev, "could not allocate resources\n");
+		return (ENXIO);
+	}
+
+	sc->bst = rman_get_bustag(sc->res);
+	sc->bsh = rman_get_bushandle(sc->res);
+
+	/* Enable I2C */
+	/* i2c_write_reg(sc, I2C_CONTROL_REG, I2CCR_MEN); */
+
+	bus_release_resource(dev, SYS_RES_MEMORY, sc->rid, sc->res);
+	device_set_desc(dev, "Rockchip rk30xx I2C bus controller");
+
+	return (BUS_PROBE_DEFAULT);
+}
+
+static int
+i2c_attach(device_t dev)
+{
+
+	return 0;
+}
+
+static phandle_t
+i2c_get_node(device_t bus, device_t dev)
+{
+	/*
+	 * Share controller node with iicbus device
+	 */
+	return ofw_bus_get_node(bus);
+}
+
+static int
+i2c_repeated_start(device_t dev, u_char slave, int timeout)
+{
+
+	return 0;
+}
+
+static int
+i2c_start(device_t dev, u_char slave, int timeout)
+{
+
+	return 0;
+}
+
+static int
+i2c_stop(device_t dev)
+{
+
+	return 0;
+}
+
+static int
+i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
+{
+
+	return 0;
+}
+
+static int
+i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
+{
+
+	return 0;
+}
+
+static int
+i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
+{
+
+	return 0;
+}
