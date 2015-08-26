@@ -1,3 +1,29 @@
+/*-
+ * Copyright (C) 2015 usk
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -24,6 +50,28 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/openfirm.h>
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
+
+#define I2C_CON_REG		0x0000
+#define I2C_CLKDIV_REG		0x0004
+#define I2C_MRXADDR_REG	0x0008
+#define I2C_MRXRADDR_REG	0x000c
+#define I2C_MTXCNT_REG		0x0010
+#define I2C_MRXCNT_REG		0x0014
+#define I2C_IEN_REG		0x0018
+#define I2C_IPD_REG		0x001c
+#define I2C_FCNT_REG		0x0020
+#define I2C_TXDATA_REG		0x0100
+#define I2C_RXDATA_REG		0x0200
+
+#define I2C_CON_EN		(1 << 0)
+#define I2C_CON_TX_MODE	(0 << 1)
+#define I2C_CON_TXADDR_MODE	(1 << 1)
+#define I2C_CON_RX_MODE	(2 << 1)
+#define I2C_CON_RXADDR_MODE	(3 << 1)
+#define I2C_CON_START		(1 << 3)  /* clear by H/W */
+#define I2C_CON_STOP		(1 << 4)  /* clear by H/W */
+#define I2C_CON_ACK		(0 << 5)
+#define I2C_CON_ACK2NAK_IGNORE	(0 << 6)
 
 struct i2c_softc {
 	device_t		dev;
@@ -83,6 +131,20 @@ static struct ofw_compat_data compat_data[] = {
 	{NULL,                  0}
 };
 
+static __inline void
+i2c_write_reg(struct i2c_softc *sc, bus_size_t off, uint32_t val)
+{
+
+	bus_space_write_32(sc->bst, sc->bsh, off, val);
+}
+
+static __inline uint32_t
+i2c_read_reg(struct i2c_softc *sc, bus_size_t off)
+{
+
+	return (bus_space_read_32(sc->bst, sc->bsh, off));
+}
+
 static int
 i2c_probe(device_t dev)
 {
@@ -108,8 +170,7 @@ i2c_probe(device_t dev)
 	sc->bsh = rman_get_bushandle(sc->res);
 
 	/* Enable I2C */
-	/* i2c_write_reg(sc, I2C_CONTROL_REG, I2CCR_MEN); */
-
+	i2c_write_reg(sc, I2C_CON_REG, 0x00000000|I2C_CON_EN);
 	bus_release_resource(dev, SYS_RES_MEMORY, sc->rid, sc->res);
 	device_set_desc(dev, "Rockchip rk30xx I2C bus controller");
 
@@ -119,8 +180,34 @@ i2c_probe(device_t dev)
 static int
 i2c_attach(device_t dev)
 {
+	struct i2c_softc *sc;
 
-	return 0;
+	sc = device_get_softc(dev);
+	sc->dev = dev;
+	sc->rid = 0;
+
+	mtx_init(&sc->mutex, device_get_nameunit(dev), "rkiic", MTX_DEF);
+
+	sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->rid,
+	    RF_ACTIVE);
+	if (sc->res == NULL) {
+		device_printf(dev, "could not allocate resources");
+		mtx_destroy(&sc->mutex);
+		return (ENXIO);
+	}
+
+	sc->bst = rman_get_bustag(sc->res);
+	sc->bsh = rman_get_bushandle(sc->res);
+
+	sc->iicbus = device_add_child(dev, "iicbus", -1);
+	if (sc->iicbus == NULL) {
+		device_printf(dev, "could not add iicbus child");
+		mtx_destroy(&sc->mutex);
+		return (ENXIO);
+	}
+
+	bus_generic_attach(dev);
+	return (IIC_NOERR);
 }
 
 static phandle_t
