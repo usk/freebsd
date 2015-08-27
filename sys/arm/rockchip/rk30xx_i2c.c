@@ -60,18 +60,49 @@ __FBSDID("$FreeBSD$");
 #define I2C_IEN_REG		0x0018
 #define I2C_IPD_REG		0x001c
 #define I2C_FCNT_REG		0x0020
-#define I2C_TXDATA_REG		0x0100
-#define I2C_RXDATA_REG		0x0200
+#define I2C_TXDATA_REG(n)	(0x0100 + ((n) * 4))
+#define I2C_RXDATA_REG(n)	(0x0200 + ((n) * 4))
 
 #define I2C_CON_EN		(1 << 0)
-#define I2C_CON_TX_MODE	(0 << 1)
-#define I2C_CON_TXADDR_MODE	(1 << 1)
-#define I2C_CON_RX_MODE	(2 << 1)
-#define I2C_CON_RXADDR_MODE	(3 << 1)
-#define I2C_CON_START		(1 << 3)  /* clear by H/W */
-#define I2C_CON_STOP		(1 << 4)  /* clear by H/W */
+#define I2C_CON_MODE_TX	(0 << 1)
+#define I2C_CON_MODE_TXADDR	(1 << 1)
+#define I2C_CON_MODE_RX	(2 << 1)
+#define I2C_CON_MODE_RXADDR	(3 << 1)
+#define I2C_CON_START		(1 << 3)  /* this bit is cleared by H/W */
+#define I2C_CON_STOP		(1 << 4)  /* ditto */
 #define I2C_CON_ACK		(0 << 5)
+#define I2C_CON_NAK		(1 << 5)
 #define I2C_CON_ACK2NAK_IGNORE	(0 << 6)
+#define I2C_CON_ACK2NAK_STOP	(1 << 6)
+
+#define I2C_CLKDIV_LOW		0x0000ffff
+#define I2C_CLKDIV_HIGH	0xffff0000
+
+#define I2C_MRXADDR_SADDR	0x007fffff
+#define I2C_MRXADDR_ADDLVLD	(1 << 24)
+#define I2C_MRXADDR_ADDMVLD	(1 << 25)
+#define I2C_MRXADDR_ADDHVLD	(1 << 26)
+
+#define I2C_MRXRADDR_SRADDR	0x007fffff
+#define I2C_MRXRADDR_SRADDLVLD	(1 << 24)
+#define I2C_MRXRADDR_SRADDMVLD	(1 << 25)
+#define I2C_MRXRADDR_SRADDHVLD	(1 << 26)
+
+#define I2C_MTXCNT_COUNT	0x0000003f
+
+#define I2C_MRXCNT_COUNT	0x0000003f
+
+#define I2C_INT_BTF	(1 << 0)
+#define I2C_INT_BRF	(1 << 1)
+#define I2C_INT_MBTF	(1 << 2)
+#define I2C_INT_MBRF	(1 << 3)
+#define I2C_INT_START	(1 << 4)
+#define I2C_INT_STOP	(1 << 5)
+#define I2C_INT_NAKRCV	(1 << 6)
+
+#define I2C_FCNT_COUNT		0x0000003f
+
+#define I2C_CLOCK_RATE	100000
 
 struct i2c_softc {
 	device_t		dev;
@@ -135,14 +166,21 @@ static __inline void
 i2c_write_reg(struct i2c_softc *sc, bus_size_t off, uint32_t val)
 {
 
-	bus_space_write_32(sc->bst, sc->bsh, off, val);
+	bus_space_write_4(sc->bst, sc->bsh, off, val);
 }
 
 static __inline uint32_t
 i2c_read_reg(struct i2c_softc *sc, bus_size_t off)
 {
 
-	return (bus_space_read_32(sc->bst, sc->bsh, off));
+	return (bus_space_read_4(sc->bst, sc->bsh, off));
+}
+
+static int
+i2c_intr(void *priv)
+{
+
+	return 0;
 }
 
 static int
@@ -156,22 +194,6 @@ i2c_probe(device_t dev)
 	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0)
 		return (ENXIO);
 
-	sc = device_get_softc(dev);
-	sc->rid = 0;
-
-	sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->rid,
-	    RF_ACTIVE);
-	if (sc->res == NULL) {
-		device_printf(dev, "could not allocate resources\n");
-		return (ENXIO);
-	}
-
-	sc->bst = rman_get_bustag(sc->res);
-	sc->bsh = rman_get_bushandle(sc->res);
-
-	/* Enable I2C */
-	i2c_write_reg(sc, I2C_CON_REG, 0x00000000|I2C_CON_EN);
-	bus_release_resource(dev, SYS_RES_MEMORY, sc->rid, sc->res);
 	device_set_desc(dev, "Rockchip rk30xx I2C bus controller");
 
 	return (BUS_PROBE_DEFAULT);
@@ -198,6 +220,9 @@ i2c_attach(device_t dev)
 
 	sc->bst = rman_get_bustag(sc->res);
 	sc->bsh = rman_get_bushandle(sc->res);
+
+	i2c_write_reg(sc, I2C_CON_REG, 0);
+	i2c_write_reg(sc, I2C_IEN_REG, 0);
 
 	sc->iicbus = device_add_child(dev, "iicbus", -1);
 	if (sc->iicbus == NULL) {
