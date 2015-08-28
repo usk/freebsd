@@ -189,15 +189,15 @@ i2c_dump_reg(struct i2c_softc *sc)
 	device_t dev = sc->dev;
 	int i;
 
-	device_printf(dev, "I2C_CON_REG:       0x%04x", i2c_read_reg(sc, I2C_CON_REG));       /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_CLKDIV_REG:    0x%04x", i2c_read_reg(sc, I2C_CLKDIV_REG));    /* reset value: 0x00060006 */
-	device_printf(dev, "I2C_MRXADDR_REG:   0x%04x", i2c_read_reg(sc, I2C_MRXADDR_REG));   /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_MRXRADDR_REG:  0x%04x", i2c_read_reg(sc, I2C_MRXRADDR_REG));  /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_MTXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MTXCNT_REG));    /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_MRXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MRXCNT_REG));    /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_IEN_REG:       0x%04x", i2c_read_reg(sc, I2C_IEN_REG));       /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_IPD_REG:       0x%04x", i2c_read_reg(sc, I2C_IPD_REG));       /* reset value: 0x00000000 */
-	device_printf(dev, "I2C_FCNT_REG:      0x%04x", i2c_read_reg(sc, I2C_FCNT_REG));      /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_CON_REG:       0x%04x", i2c_read_reg(sc, I2C_CON_REG));
+	device_printf(dev, "I2C_CLKDIV_REG:    0x%04x", i2c_read_reg(sc, I2C_CLKDIV_REG));
+	device_printf(dev, "I2C_MRXADDR_REG:   0x%04x", i2c_read_reg(sc, I2C_MRXADDR_REG));
+	device_printf(dev, "I2C_MRXRADDR_REG:  0x%04x", i2c_read_reg(sc, I2C_MRXRADDR_REG));
+	device_printf(dev, "I2C_MTXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MTXCNT_REG));
+	device_printf(dev, "I2C_MRXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MRXCNT_REG));
+	device_printf(dev, "I2C_IEN_REG:       0x%04x", i2c_read_reg(sc, I2C_IEN_REG));
+	device_printf(dev, "I2C_IPD_REG:       0x%04x", i2c_read_reg(sc, I2C_IPD_REG));
+	device_printf(dev, "I2C_FCNT_REG:      0x%04x", i2c_read_reg(sc, I2C_FCNT_REG));
 
 	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
 		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_TXDATA_REG));  /* reset value: 0x00000000 */
@@ -279,8 +279,15 @@ i2c_attach(device_t dev)
 	sc->timer_bst = rman_get_bustag(sc->res[0]);
 	sc->timer_bsh = rman_get_bushandle(sc->res[0]);
 	i2c_dump_reg(sc);
-	i2c_write_reg(sc, I2C_CON_REG, 0);
-	i2c_write_reg(sc, I2C_IEN_REG, 0);
+	i2c_write_reg(sc, I2C_CON_REG,      0x00000000);
+	i2c_write_reg(sc, I2C_CLKDIV_REG,   0x00060006);
+	i2c_write_reg(sc, I2C_MRXADDR_REG,  0x00000000);
+	i2c_write_reg(sc, I2C_MRXRADDR_REG, 0x00000000);
+	i2c_write_reg(sc, I2C_MTXCNT_REG,   0x00000000);
+	i2c_write_reg(sc, I2C_MRXCNT_REG,   0x00000000);
+	i2c_write_reg(sc, I2C_IEN_REG,      0x00000000);
+	i2c_write_reg(sc, I2C_IPD_REG,      0x00000000);
+	i2c_write_reg(sc, I2C_FCNT_REG,     0x00000000);
 
 	if (bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK, i2c_intr, NULL, sc, &ihl) != 0) {
 		device_printf(dev, "could not setup interrupt");
