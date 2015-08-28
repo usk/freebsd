@@ -62,6 +62,8 @@ __FBSDID("$FreeBSD$");
 #define I2C_FCNT_REG		0x0020
 #define I2C_TXDATA_REG(n)	(0x0100 + ((n) * 4))
 #define I2C_RXDATA_REG(n)	(0x0200 + ((n) * 4))
+#define I2C_TXDATA_REG_MAX	8
+#define I2C_RXDATA_REG_MAX	8
 
 #define I2C_CON_EN		(1 << 0)
 #define I2C_CON_MODE_TX	(0 << 1)
@@ -100,18 +102,23 @@ __FBSDID("$FreeBSD$");
 #define I2C_INT_STOP	(1 << 5)
 #define I2C_INT_NAKRCV	(1 << 6)
 
-#define I2C_FCNT_COUNT		0x0000003f
+#define I2C_FCNT_COUNT	0x0000003f
 
 #define I2C_CLOCK_RATE	100000
 
 struct i2c_softc {
 	device_t		dev;
 	device_t		iicbus;
-	struct resource	*res;
 	struct mtx		mutex;
-	int			rid;
+	struct resource	*res[2];  /* 0: MMIO, 1:INTR */
 	bus_space_handle_t	bsh;
 	bus_space_tag_t	bst;
+};
+
+static struct resource_spec i2c_spec[] = {
+	{ SYS_RES_MEMORY,	0,	RF_ACTIVE },
+	{ SYS_RES_IRQ,		0,	RF_ACTIVE },
+	{ -1, 0 }
 };
 
 static int i2c_probe(device_t);
@@ -176,9 +183,60 @@ i2c_read_reg(struct i2c_softc *sc, bus_size_t off)
 	return (bus_space_read_4(sc->bst, sc->bsh, off));
 }
 
-static int
-i2c_intr(void *priv)
+static void
+i2c_dump_reg(struct i2c_softc *sc)
 {
+	device_t dev = sc->dev;
+	int i;
+
+	device_printf(dev, "I2C_CON_REG:       0x%04x", i2c_read_reg(sc, I2C_CON_REG));       /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_CLKDIV_REG:    0x%04x", i2c_read_reg(sc, I2C_CLKDIV_REG));    /* reset value: 0x00060006 */
+	device_printf(dev, "I2C_MRXADDR_REG:   0x%04x", i2c_read_reg(sc, I2C_MRXADDR_REG));   /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_MRXRADDR_REG:  0x%04x", i2c_read_reg(sc, I2C_MRXRADDR_REG));  /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_MTXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MTXCNT_REG));    /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_MRXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MRXCNT_REG));    /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_IEN_REG:       0x%04x", i2c_read_reg(sc, I2C_IEN_REG));       /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_IPD_REG:       0x%04x", i2c_read_reg(sc, I2C_IPD_REG));       /* reset value: 0x00000000 */
+	device_printf(dev, "I2C_FCNT_REG:      0x%04x", i2c_read_reg(sc, I2C_FCNT_REG));      /* reset value: 0x00000000 */
+
+	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
+		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_TXDATA_REG));  /* reset value: 0x00000000 */
+	}
+
+	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
+		device_printf(dev, "I2C_RXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_RXDATA_REG));  /* reset value: 0x00000000 */
+	}
+}
+
+static int
+i2c_intr(void *arg)
+{
+	struct i2c_softc *sc;
+	uint32_t ipd;
+
+	sc = (struct i2c_softc *)arg;
+	ipd = i2c_read_reg(sc, I2C_IPD_REG);
+
+	if (ipd & I2C_INT_BTF) {
+	}
+
+	if (ipd & I2C_INT_BRF) {
+	}
+
+	if (ipd & I2C_INT_MBTF) {
+	}
+
+	if (ipd & I2C_INT_MBRF) {
+	}
+
+	if (ipd & I2C_INT_START) {
+	}
+
+	if (ipd & I2C_INT_STOP) {
+	}
+
+	if (ipd & I2C_INT_NAKRCV) {
+	}
 
 	return 0;
 }
@@ -188,13 +246,15 @@ i2c_probe(device_t dev)
 {
 	struct i2c_softc *sc;
 
-	if (!ofw_bus_status_okay(dev))
+	if (!ofw_bus_status_okay(dev)) {
 		return (ENXIO);
+	}
 
-	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0)
+	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0) {
 		return (ENXIO);
+	}
 
-	device_set_desc(dev, "Rockchip rk30xx I2C bus controller");
+	device_set_desc(dev, "Rockchip RK30XX I2C bus controller");
 
 	return (BUS_PROBE_DEFAULT);
 }
@@ -203,30 +263,36 @@ static int
 i2c_attach(device_t dev)
 {
 	struct i2c_softc *sc;
+	void *ihl;
 
 	sc = device_get_softc(dev);
 	sc->dev = dev;
-	sc->rid = 0;
 
 	mtx_init(&sc->mutex, device_get_nameunit(dev), "rkiic", MTX_DEF);
 
-	sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->rid,
-	    RF_ACTIVE);
-	if (sc->res == NULL) {
+	if (bus_alloc_resources(dev, i2c_spec, sc->res)) {
 		device_printf(dev, "could not allocate resources");
 		mtx_destroy(&sc->mutex);
 		return (ENXIO);
 	}
 
-	sc->bst = rman_get_bustag(sc->res);
-	sc->bsh = rman_get_bushandle(sc->res);
-
+	sc->timer_bst = rman_get_bustag(sc->res[0]);
+	sc->timer_bsh = rman_get_bushandle(sc->res[0]);
+	i2c_dump_reg(sc);
 	i2c_write_reg(sc, I2C_CON_REG, 0);
 	i2c_write_reg(sc, I2C_IEN_REG, 0);
+
+	if (bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK, i2c_intr, NULL, sc, &ihl) != 0) {
+		device_printf(dev, "could not setup interrupt");
+		bus_release_resources(dev, i2c_spec, sc->res);
+		mtx_destroy(&sc->mutex);
+		return (ENXIO);
+	}
 
 	sc->iicbus = device_add_child(dev, "iicbus", -1);
 	if (sc->iicbus == NULL) {
 		device_printf(dev, "could not add iicbus child");
+		bus_release_resources(dev, i2c_spec, sc->res);
 		mtx_destroy(&sc->mutex);
 		return (ENXIO);
 	}
