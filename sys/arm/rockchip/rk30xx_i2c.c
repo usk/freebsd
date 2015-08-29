@@ -189,23 +189,55 @@ i2c_dump_reg(struct i2c_softc *sc)
 	device_t dev = sc->dev;
 	int i;
 
-	device_printf(dev, "I2C_CON_REG:       0x%04x", i2c_read_reg(sc, I2C_CON_REG));
-	device_printf(dev, "I2C_CLKDIV_REG:    0x%04x", i2c_read_reg(sc, I2C_CLKDIV_REG));
-	device_printf(dev, "I2C_MRXADDR_REG:   0x%04x", i2c_read_reg(sc, I2C_MRXADDR_REG));
-	device_printf(dev, "I2C_MRXRADDR_REG:  0x%04x", i2c_read_reg(sc, I2C_MRXRADDR_REG));
-	device_printf(dev, "I2C_MTXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MTXCNT_REG));
-	device_printf(dev, "I2C_MRXCNT_REG:    0x%04x", i2c_read_reg(sc, I2C_MRXCNT_REG));
-	device_printf(dev, "I2C_IEN_REG:       0x%04x", i2c_read_reg(sc, I2C_IEN_REG));
-	device_printf(dev, "I2C_IPD_REG:       0x%04x", i2c_read_reg(sc, I2C_IPD_REG));
-	device_printf(dev, "I2C_FCNT_REG:      0x%04x", i2c_read_reg(sc, I2C_FCNT_REG));
+	device_printf(dev, "I2C_CON_REG:       0x%08x\n", i2c_read_reg(sc, I2C_CON_REG));
+	device_printf(dev, "I2C_CLKDIV_REG:    0x%08x\n", i2c_read_reg(sc, I2C_CLKDIV_REG));
+	device_printf(dev, "I2C_MRXADDR_REG:   0x%08x\n", i2c_read_reg(sc, I2C_MRXADDR_REG));
+	device_printf(dev, "I2C_MRXRADDR_REG:  0x%08x\n", i2c_read_reg(sc, I2C_MRXRADDR_REG));
+	device_printf(dev, "I2C_MTXCNT_REG:    0x%08x\n", i2c_read_reg(sc, I2C_MTXCNT_REG));
+	device_printf(dev, "I2C_MRXCNT_REG:    0x%08x\n", i2c_read_reg(sc, I2C_MRXCNT_REG));
+	device_printf(dev, "I2C_IEN_REG:       0x%08x\n", i2c_read_reg(sc, I2C_IEN_REG));
+	device_printf(dev, "I2C_IPD_REG:       0x%08x\n", i2c_read_reg(sc, I2C_IPD_REG));
+	device_printf(dev, "I2C_FCNT_REG:      0x%08x\n", i2c_read_reg(sc, I2C_FCNT_REG));
 
 	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
-		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_TXDATA_REG(i)));  /* reset value: 0x00000000 */
+		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%08x\n", i, i2c_read_reg(sc, I2C_TXDATA_REG(i)));
 	}
 
 	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
-		device_printf(dev, "I2C_RXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_RXDATA_REG(i)));  /* reset value: 0x00000000 */
+		device_printf(dev, "I2C_RXDATA_REG[%d]: 0x%08x\n", i, i2c_read_reg(sc, I2C_RXDATA_REG(i)));
 	}
+}
+
+static int
+i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
+{
+#if 0
+	int port;
+	uint32_t i2c_rate, clkdiv, divh, divl;
+
+	port = device_get_unit(dev);
+	if (port == 0 || port == 1) {
+		/* I2C0 and I2C1 are in cpu system */
+		i2c_rate = rockchip_pclk_cpu_get_rate();
+	} else {
+		/* I2C2, I2C3 and I2C4 are in peri system */
+		i2c_rate = rockchip_apb_get_rate();
+	}
+	if (i2c_rate == 0) {
+		return ENXIO;
+	}
+
+	/*
+	 * SCL Divisor = 8 * (CLKDIVL + CLKDIVH)
+	 * SCL = PCLK / SCLK Divisor
+	 */
+	div = (i2c_rate + (rate * 8 - 1)) / (rate * 8);
+	divh = divl = (div + (2 - 1)) / 2;
+	clkdiv = (divh << 16) | (divl & I2C_CLKDIV_LOW);
+	i2c_write_reg(sc, I2C_CLKDIV_REG, clkdiv);
+#endif
+
+	return 0;
 }
 
 static int
@@ -287,6 +319,7 @@ i2c_attach(device_t dev)
 	i2c_write_reg(sc, I2C_IEN_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_IPD_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_FCNT_REG,     0x00000000);
+	i2c_set_rate(sc, I2C_CLOCK_RATE);
 
 	if (bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK, i2c_intr, NULL, sc, &ihl) != 0) {
 		device_printf(dev, "could not setup interrupt");

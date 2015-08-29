@@ -23,6 +23,10 @@
 include 	"RK3188"
 ident		RADXA-LITE
 
+# Root mount from MMC/SD card
+nooptions 	ROOTDEVNAME
+options 	ROOTDEVNAME=\"ufs:/dev/mmcsd0s1\"
+
 # Flattened Device Tree
 options 	FDT
 options 	FDT_DTB_STATIC
