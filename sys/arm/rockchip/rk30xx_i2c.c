@@ -200,11 +200,11 @@ i2c_dump_reg(struct i2c_softc *sc)
 	device_printf(dev, "I2C_FCNT_REG:      0x%04x", i2c_read_reg(sc, I2C_FCNT_REG));
 
 	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
-		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_TXDATA_REG));  /* reset value: 0x00000000 */
+		device_printf(dev, "I2C_TXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_TXDATA_REG(i)));  /* reset value: 0x00000000 */
 	}
 
 	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
-		device_printf(dev, "I2C_RXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_RXDATA_REG));  /* reset value: 0x00000000 */
+		device_printf(dev, "I2C_RXDATA_REG[%d]: 0x%04x", i, i2c_read_reg(sc, I2C_RXDATA_REG(i)));  /* reset value: 0x00000000 */
 	}
 }
 
@@ -244,7 +244,6 @@ i2c_intr(void *arg)
 static int
 i2c_probe(device_t dev)
 {
-	struct i2c_softc *sc;
 
 	if (!ofw_bus_status_okay(dev)) {
 		return (ENXIO);
@@ -276,8 +275,8 @@ i2c_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	sc->timer_bst = rman_get_bustag(sc->res[0]);
-	sc->timer_bsh = rman_get_bushandle(sc->res[0]);
+	sc->bst = rman_get_bustag(sc->res[0]);
+	sc->bsh = rman_get_bushandle(sc->res[0]);
 	i2c_dump_reg(sc);
 	i2c_write_reg(sc, I2C_CON_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_CLKDIV_REG,   0x00060006);
