@@ -44,6 +44,26 @@
 
 	SOC: rk3188 {
 
+		i2c0: iic@0x2002c000 {
+			status = "okay";
+		};
+
+		i2c1: iic@0x2002e000 {
+			status = "okay";
+		};
+
+		i2c2: iic@0x20054000 {
+			status = "okay";
+		};
+
+		i2c3: iic@0x20058000 {
+			status = "okay";
+		};
+
+		i2c4: iic@0x2005c000 {
+			status = "okay";
+		};
+
 		uart2: serial@20064000 {
 			status = "okay";
 		};
@@ -60,4 +80,3 @@
 		stdout = &uart2;
 	};
 };
-
