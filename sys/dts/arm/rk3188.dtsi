@@ -137,6 +137,16 @@
 			interrupts = <73>;
 			interrupt-parent = <&GIC>;
 			status = "disabled";
+
+			iicbus@1 {
+				model = "iicbus";
+
+				rtc@0x51 {
+					compatible = "nxp,pcf8563";
+					i2c-address = <0x51>;
+					status = "disabled";
+				};
+			};
 		};
 
 		i2c2: iic@0x20056000 {

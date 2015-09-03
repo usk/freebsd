@@ -208,6 +208,30 @@ i2c_dump_reg(struct i2c_softc *sc)
 	}
 }
 
+static uint32_t
+rockchip_pclk_cpu_get_rate()
+{
+#define CRU_BASE 0x20000000
+#define CRU_SIZE 0x1000
+#define CRU_APLL_CON_REG(n)        (0x0000 + 4 * (n))  /* ARM PLL configuration registers */
+#define CRU_DPLL_CON_REG(n)        (0x0010 + 4 * (n))  /* DDR PLL configuration registers */
+#define CRU_CPLL_CON_REG(n)        (0x0020 + 4 * (n))  /* CODEC PLL configuration registers */
+#define CRU_GPLL_CON_REG(n)        (0x0030 + 4 * (n))  /* GENERAL PLL configuration registers */
+#define CRU_MODE_CON_REG           0x0040              /* System work mode control register */
+#define CRU_CLKSEL_CON_REG(n)      (0x0044 + 4 * (n))  /* Internal clock select and divide registers */
+#define CRU_CLKGATE_CON_REG(n)     (0x00d0 + 4 * (n))  /* Internal clock gating control registers */
+#define CRU_GLB_SRST_FST_VALUE_REG 0x0100              /* The 1st global software reset config value */
+#define CRU_GLB_SRST_SND_VALUE_REG 0x0104              /* The 2nd global software reset config value */
+#define CRU_SOFTRST_CON_REG(n)     (0x0110 + 4 * (n))  /* Internal software reset control registers */
+#define CRU_MISC_CON_REG           0x0134              /* SCU control register */
+#define CRU_GLB_CNT_TH_REG         0x0140              /* Global reset wait counter threshold */
+
+	char *va_cru = (char *)arm_devmap_ptov(CRU_BASE, CRU_SIZE);
+	volatile uint32_t *clksel_con0 = (uint32_t *)(va_cru+CRU_CLKSEL_CON_REG(0));
+
+	return 0;
+}
+
 static int
 i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 {

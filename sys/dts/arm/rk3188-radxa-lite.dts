@@ -50,6 +50,12 @@
 
 		i2c1: iic@0x2002f000 {
 			status = "okay";
+
+			iicbus@1 {
+				rtc@0x51 {
+					status = "okay";
+				};
+			};
 		};
 
 		i2c2: iic@0x20056000 {
