@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/lock.h>
 #include <sys/mutex.h>
+#include <machine/atomic.h>
 
 #include <dev/iicbus/iiconf.h>
 #include <dev/iicbus/iicbus.h>
@@ -180,7 +181,7 @@ static __inline uint32_t
 i2c_read_reg(struct i2c_softc *sc, bus_size_t off)
 {
 
-	return (bus_space_read_4(sc->bst, sc->bsh, off));
+	return bus_space_read_4(sc->bst, sc->bsh, off);
 }
 
 static void
@@ -208,45 +209,151 @@ i2c_dump_reg(struct i2c_softc *sc)
 	}
 }
 
+/*
+ * todo:
+ *   branch by rockchip chip id
+ *   implement CRU driver
+ */
+#define __BIT(n)			(1 << (n))
+#define __BITS(hi,lo)			((~((~0)<<((hi)+1)))&((~0)<<(lo)))
+#define __LOWEST_SET_BIT(__mask)	((((__mask) - 1) & (__mask)) ^ (__mask))
+#define __SHIFTOUT(__x, __mask)	(((__x) & (__mask)) / __LOWEST_SET_BIT(__mask))
+
+#define CRU_VA						((volatile uint8_t *)arm_devmap_ptov(0x20000000, 0x1000))
+#define CRU_APLL_CON_REG(n)				(0x0000 + 4 * (n))	/* ARM PLL configuration registers */
+#define CRU_DPLL_CON_REG(n)				(0x0010 + 4 * (n))	/* DDR PLL configuration registers */
+#define CRU_CPLL_CON_REG(n)				(0x0020 + 4 * (n))	/* CODEC PLL configuration registers */
+#define CRU_GPLL_CON_REG(n)				(0x0030 + 4 * (n))	/* GENERAL PLL configuration registers */
+#define CRU_MODE_CON_REG				0x0040			/* System work mode control register */
+#define CRU_CLKSEL_CON_REG(n)				(0x0044 + 4 * (n))	/* Internal clock select and divide registers */
+#define CRU_CLKGATE_CON_REG(n)				(0x00d0 + 4 * (n))	/* Internal clock gating control registers */
+#define CRU_GLB_SRST_FST_VALUE_REG			0x0100			/* The 1st global software reset config value */
+#define CRU_GLB_SRST_SND_VALUE_REG			0x0104			/* The 2nd global software reset config value */
+#define CRU_SOFTRST_CON_REG(n)				(0x0110 + 4 * (n))	/* Internal software reset control registers */
+#define CRU_MISC_CON_REG				0x0134			/* SCU control register */
+#define CRU_GLB_CNT_TH_REG				0x0140			/* Global reset wait counter threshold */
+
+#define CRU_CLKSEL_CON0_CPU_CLK_PLL_SEL		__BIT(8)
+#define CRU_CLKSEL_CON10_PERI_ACLK_DIV_CON		__BITS(4,0)
+#define CRU_CLKSEL_CON10_PERI_PCLK_DIV_CON		__BITS(13,12)
+#define CRU_CLKSEL_CON10_PERI_PLL_SEL			__BIT(15)
+#define CRU_CLKSEL_CON1_CPU_PCLK_DIV_CON		__BITS(13,12)
+#define CRU_PLL_CON0_CLKR				__BITS(13,8)
+#define RK3188_CRU_CLKSEL_CON0_A9_CORE_DIV_CON		__BITS(13,9)
+#define RK3188_CRU_CLKSEL_CON1_CPU_ACLK_DIV_CON	__BITS(5,3)
+#define RK3188_CRU_PLL_CON0_CLKOD			__BITS(5,0)
+#define RK3188_CRU_PLL_CON1_CLKF			__BITS(15,0)
+#define ROCKCHIP_REF_FREQ				24000000L		/* 24MHz */
+
+static uint32_t
+rockchip_pll_get_rate(uint32_t *con0_reg, uint32_t *con1_reg)
+{
+	uint32_t pll_con0, pll_con1;
+	uint32_t nr, no, nf;
+
+	pll_con0 = *((volatile uint32_t *)(CRU_VA+con0_reg));
+	pll_con1 = *((volatile uint32_t *)(CRU_VA+con1_reg));
+	rmb();
+
+	nr = __SHIFTOUT(pll_con0, CRU_PLL_CON0_CLKR) + 1;
+	no = __SHIFTOUT(pll_con0, RK3188_CRU_PLL_CON0_CLKOD) + 1;
+	nf = __SHIFTOUT(pll_con1, RK3188_CRU_PLL_CON1_CLKF) + 1;
+
+	return ((uint64_t)ROCKCHIP_REF_FREQ * nf) / (nr * no);
+}
+
+static uint32_t
+rockchip_gpll_get_rate()
+{
+
+	return rockchip_pll_get_rate(CRU_GPLL_CON_REG(0), CRU_GPLL_CON_REG(1));
+}
+
+static uint32_t
+rockchip_apll_get_rate()
+{
+
+	return rockchip_pll_get_rate(CRU_APLL_CON_REG(0), CRU_APLL_CON_REG(1));
+}
+
+static uint32_t
+rockchip_cpu_get_rate()
+{
+	uint32_t clksel_con0;
+	uint32_t a9_core_div;
+
+	clksel_con0 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(1)));
+	rmb();
+
+	a9_core_div = __SHIFTOUT(clksel_con0, RK3188_CRU_CLKSEL_CON0_A9_CORE_DIV_CON) + 1;
+	if (clksel_con0 & CRU_CLKSEL_CON0_CPU_CLK_PLL_SEL) {
+		return rockchip_gpll_get_rate() / a9_core_div;
+	} else {
+		return rockchip_apll_get_rate() / a9_core_div;
+	}
+}
+
 static uint32_t
 rockchip_pclk_cpu_get_rate()
 {
-#define CRU_BASE 0x20000000
-#define CRU_SIZE 0x1000
-#define CRU_APLL_CON_REG(n)        (0x0000 + 4 * (n))  /* ARM PLL configuration registers */
-#define CRU_DPLL_CON_REG(n)        (0x0010 + 4 * (n))  /* DDR PLL configuration registers */
-#define CRU_CPLL_CON_REG(n)        (0x0020 + 4 * (n))  /* CODEC PLL configuration registers */
-#define CRU_GPLL_CON_REG(n)        (0x0030 + 4 * (n))  /* GENERAL PLL configuration registers */
-#define CRU_MODE_CON_REG           0x0040              /* System work mode control register */
-#define CRU_CLKSEL_CON_REG(n)      (0x0044 + 4 * (n))  /* Internal clock select and divide registers */
-#define CRU_CLKGATE_CON_REG(n)     (0x00d0 + 4 * (n))  /* Internal clock gating control registers */
-#define CRU_GLB_SRST_FST_VALUE_REG 0x0100              /* The 1st global software reset config value */
-#define CRU_GLB_SRST_SND_VALUE_REG 0x0104              /* The 2nd global software reset config value */
-#define CRU_SOFTRST_CON_REG(n)     (0x0110 + 4 * (n))  /* Internal software reset control registers */
-#define CRU_MISC_CON_REG           0x0134              /* SCU control register */
-#define CRU_GLB_CNT_TH_REG         0x0140              /* Global reset wait counter threshold */
+	uint32_t clksel_con1;
+	uint32_t aclk_div, core_axi_div;
 
-	char *va_cru = (char *)arm_devmap_ptov(CRU_BASE, CRU_SIZE);
-	volatile uint32_t *clksel_con0 = (uint32_t *)(va_cru+CRU_CLKSEL_CON_REG(0));
+	clksel_con1 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(1)));
+	rmb();
 
-	return 0;
+	aclk_div = __SHIFTOUT(clksel_con1, RK3188_CRU_CLKSEL_CON1_CPU_ACLK_DIV_CON);
+	switch (aclk_div) {
+	case 0: core_axi_div = 1; break;
+	case 1: core_axi_div = 2; break;
+	case 2: core_axi_div = 3; break;
+	case 3: core_axi_div = 4; break;
+	case 4: core_axi_div = 8; break;
+	default: return EINVAL;
+	}
+	pclk_div = 1 << __SHIFTOUT(clksel_con1, CRU_CLKSEL_CON1_CPU_PCLK_DIV_CON);
+
+	return rockchip_cpu_get_rate() / (core_axi_div * pclk_div);
+}
+
+static uint32_t
+rockchip_apb_get_rate()
+{
+	uint32_t clksel_con10;
+	uint32_t pclk_div, aclk_div;
+
+	clksel_con10 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(10)));
+	rmb();
+
+	if (clksel_con10 & CRU_CLKSEL_CON10_PERI_PLL_SEL) {
+		rate = rockchip_gpll_get_rate();
+	} else {
+		rate = rockchip_cpll_get_rate();
+	}
+	aclk_div = __SHIFTOUT(clksel_con10, CRU_CLKSEL_CON10_PERI_ACLK_DIV_CON) + 1;
+	pclk_div = 1 << __SHIFTOUT(clksel_con10, CRU_CLKSEL_CON10_PERI_PCLK_DIV_CON);
+
+	return rate / (aclk_div * pclk_div);
+}
+
+static uint32_t
+rockchip_i2c_get_rate(uint32_t port)
+{
+	if (port == 0 || port == 1) {
+		return rockchip_pclk_cpu_get_rate();
+	} else {
+		return rockchip_apb_get_rate();
+	}
 }
 
 static int
 i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 {
-#if 0
 	int port;
 	uint32_t i2c_rate, clkdiv, divh, divl;
 
 	port = device_get_unit(dev);
-	if (port == 0 || port == 1) {
-		/* I2C0 and I2C1 are in cpu system */
-		i2c_rate = rockchip_pclk_cpu_get_rate();
-	} else {
-		/* I2C2, I2C3 and I2C4 are in peri system */
-		i2c_rate = rockchip_apb_get_rate();
-	}
+	i2c_rate = rockchip_i2c_get_rate(port);
 	if (i2c_rate == 0) {
 		return ENXIO;
 	}
@@ -259,7 +366,6 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 	divh = divl = (div + (2 - 1)) / 2;
 	clkdiv = (divh << 16) | (divl & I2C_CLKDIV_LOW);
 	i2c_write_reg(sc, I2C_CLKDIV_REG, clkdiv);
-#endif
 
 	return 0;
 }
@@ -274,24 +380,31 @@ i2c_intr(void *arg)
 	ipd = i2c_read_reg(sc, I2C_IPD_REG);
 
 	if (ipd & I2C_INT_BTF) {
+		device_printf(sc->dev, "I2C_INT_BTF");
 	}
 
 	if (ipd & I2C_INT_BRF) {
+		device_printf(sc->dev, "I2C_INT_BRF");
 	}
 
 	if (ipd & I2C_INT_MBTF) {
+		device_printf(sc->dev, "I2C_INT_MBTF");
 	}
 
 	if (ipd & I2C_INT_MBRF) {
+		device_printf(sc->dev, "I2C_INT_MBRF");
 	}
 
 	if (ipd & I2C_INT_START) {
+		device_printf(sc->dev, "I2C_INT_START");
 	}
 
 	if (ipd & I2C_INT_STOP) {
+		device_printf(sc->dev, "I2C_INT_STOP");
 	}
 
 	if (ipd & I2C_INT_NAKRCV) {
+		device_printf(sc->dev, "I2C_INT_NAKRCV");
 	}
 
 	return 0;
