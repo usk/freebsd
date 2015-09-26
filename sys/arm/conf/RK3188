@@ -58,6 +58,7 @@ device		random			# Entropy device
 device		iicbus
 device		iic
 device		rkiic
+device		pcf8563
 
 # GPIO
 device		gpio
