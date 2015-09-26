@@ -52,6 +52,11 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
 
+#include <vm/vm.h>
+#include <vm/vm_extern.h>
+#include <vm/pmap.h>
+#include <machine/devmap.h>
+
 #define I2C_CON_REG		0x0000
 #define I2C_CLKDIV_REG		0x0004
 #define I2C_MRXADDR_REG	0x0008
@@ -219,7 +224,7 @@ i2c_dump_reg(struct i2c_softc *sc)
 #define __LOWEST_SET_BIT(__mask)	((((__mask) - 1) & (__mask)) ^ (__mask))
 #define __SHIFTOUT(__x, __mask)	(((__x) & (__mask)) / __LOWEST_SET_BIT(__mask))
 
-#define CRU_VA						((volatile uint8_t *)arm_devmap_ptov(0x20000000, 0x1000))
+#define CRU_VA						(arm_devmap_ptov(0x20000000, 0x1000))
 #define CRU_APLL_CON_REG(n)				(0x0000 + 4 * (n))	/* ARM PLL configuration registers */
 #define CRU_DPLL_CON_REG(n)				(0x0010 + 4 * (n))	/* DDR PLL configuration registers */
 #define CRU_CPLL_CON_REG(n)				(0x0020 + 4 * (n))	/* CODEC PLL configuration registers */
@@ -246,13 +251,13 @@ i2c_dump_reg(struct i2c_softc *sc)
 #define ROCKCHIP_REF_FREQ				24000000L		/* 24MHz */
 
 static uint32_t
-rockchip_pll_get_rate(uint32_t *con0_reg, uint32_t *con1_reg)
+rockchip_pll_get_rate(void *con0_reg, void *con1_reg)
 {
 	uint32_t pll_con0, pll_con1;
 	uint32_t nr, no, nf;
 
-	pll_con0 = *((volatile uint32_t *)(CRU_VA+con0_reg));
-	pll_con1 = *((volatile uint32_t *)(CRU_VA+con1_reg));
+	pll_con0 = *((volatile uint32_t *)((uint32_t)CRU_VA + (uint32_t)con0_reg));
+	pll_con1 = *((volatile uint32_t *)((uint32_t)CRU_VA + (uint32_t)con1_reg));
 	rmb();
 
 	nr = __SHIFTOUT(pll_con0, CRU_PLL_CON0_CLKR) + 1;
@@ -266,14 +271,21 @@ static uint32_t
 rockchip_gpll_get_rate()
 {
 
-	return rockchip_pll_get_rate(CRU_GPLL_CON_REG(0), CRU_GPLL_CON_REG(1));
+	return rockchip_pll_get_rate((void *)CRU_GPLL_CON_REG(0), (void *)CRU_GPLL_CON_REG(1));
+}
+
+static uint32_t
+rockchip_cpll_get_rate(void)
+{
+
+	return rockchip_pll_get_rate((void *)CRU_CPLL_CON_REG(0), (void *)CRU_CPLL_CON_REG(1));
 }
 
 static uint32_t
 rockchip_apll_get_rate()
 {
 
-	return rockchip_pll_get_rate(CRU_APLL_CON_REG(0), CRU_APLL_CON_REG(1));
+	return rockchip_pll_get_rate((void *)CRU_APLL_CON_REG(0), (void *)CRU_APLL_CON_REG(1));
 }
 
 static uint32_t
@@ -282,7 +294,7 @@ rockchip_cpu_get_rate()
 	uint32_t clksel_con0;
 	uint32_t a9_core_div;
 
-	clksel_con0 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(1)));
+	clksel_con0 = *((volatile uint32_t *)((uint32_t)CRU_VA + (uint32_t)CRU_CLKSEL_CON_REG(1)));
 	rmb();
 
 	a9_core_div = __SHIFTOUT(clksel_con0, RK3188_CRU_CLKSEL_CON0_A9_CORE_DIV_CON) + 1;
@@ -297,9 +309,9 @@ static uint32_t
 rockchip_pclk_cpu_get_rate()
 {
 	uint32_t clksel_con1;
-	uint32_t aclk_div, core_axi_div;
+	uint32_t aclk_div, core_axi_div, pclk_div;
 
-	clksel_con1 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(1)));
+	clksel_con1 = *((volatile uint32_t *)((uint32_t)CRU_VA + (uint32_t)CRU_CLKSEL_CON_REG(1)));
 	rmb();
 
 	aclk_div = __SHIFTOUT(clksel_con1, RK3188_CRU_CLKSEL_CON1_CPU_ACLK_DIV_CON);
@@ -321,8 +333,9 @@ rockchip_apb_get_rate()
 {
 	uint32_t clksel_con10;
 	uint32_t pclk_div, aclk_div;
+	u_int rate;
 
-	clksel_con10 = *((volatile uint32_t *)(CRU_VA+CRU_CLKSEL_CON_REG(10)));
+	clksel_con10 = *((volatile uint32_t *)((uint32_t)CRU_VA + (uint32_t)CRU_CLKSEL_CON_REG(10)));
 	rmb();
 
 	if (clksel_con10 & CRU_CLKSEL_CON10_PERI_PLL_SEL) {
@@ -350,13 +363,14 @@ static int
 i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 {
 	int port;
-	uint32_t i2c_rate, clkdiv, divh, divl;
+	uint32_t i2c_rate, clkdiv, div, divh, divl;
 
-	port = device_get_unit(dev);
+	port = device_get_unit(sc->dev);
 	i2c_rate = rockchip_i2c_get_rate(port);
 	if (i2c_rate == 0) {
 		return ENXIO;
 	}
+	device_printf(sc->dev, "i2c rate@%d: %u\n", port, i2c_rate);
 
 	/*
 	 * SCL Divisor = 8 * (CLKDIVL + CLKDIVH)
@@ -380,31 +394,31 @@ i2c_intr(void *arg)
 	ipd = i2c_read_reg(sc, I2C_IPD_REG);
 
 	if (ipd & I2C_INT_BTF) {
-		device_printf(sc->dev, "I2C_INT_BTF");
+		device_printf(sc->dev, "I2C_INT_BTF\n");
 	}
 
 	if (ipd & I2C_INT_BRF) {
-		device_printf(sc->dev, "I2C_INT_BRF");
+		device_printf(sc->dev, "I2C_INT_BRF\n");
 	}
 
 	if (ipd & I2C_INT_MBTF) {
-		device_printf(sc->dev, "I2C_INT_MBTF");
+		device_printf(sc->dev, "I2C_INT_MBTF\n");
 	}
 
 	if (ipd & I2C_INT_MBRF) {
-		device_printf(sc->dev, "I2C_INT_MBRF");
+		device_printf(sc->dev, "I2C_INT_MBRF\n");
 	}
 
 	if (ipd & I2C_INT_START) {
-		device_printf(sc->dev, "I2C_INT_START");
+		device_printf(sc->dev, "I2C_INT_START\n");
 	}
 
 	if (ipd & I2C_INT_STOP) {
-		device_printf(sc->dev, "I2C_INT_STOP");
+		device_printf(sc->dev, "I2C_INT_STOP\n");
 	}
 
 	if (ipd & I2C_INT_NAKRCV) {
-		device_printf(sc->dev, "I2C_INT_NAKRCV");
+		device_printf(sc->dev, "I2C_INT_NAKRCV\n");
 	}
 
 	return 0;
@@ -446,7 +460,6 @@ i2c_attach(device_t dev)
 
 	sc->bst = rman_get_bustag(sc->res[0]);
 	sc->bsh = rman_get_bushandle(sc->res[0]);
-	i2c_dump_reg(sc);
 	i2c_write_reg(sc, I2C_CON_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_CLKDIV_REG,   0x00060006);
 	i2c_write_reg(sc, I2C_MRXADDR_REG,  0x00000000);
@@ -456,7 +469,10 @@ i2c_attach(device_t dev)
 	i2c_write_reg(sc, I2C_IEN_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_IPD_REG,      0x00000000);
 	i2c_write_reg(sc, I2C_FCNT_REG,     0x00000000);
-	i2c_set_rate(sc, I2C_CLOCK_RATE);
+	if (i2c_set_rate(sc, I2C_CLOCK_RATE) == ENXIO) {
+		device_printf(sc->dev, "could not set i2c rate\n");
+	}
+	i2c_dump_reg(sc);
 
 	if (bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK, i2c_intr, NULL, sc, &ihl) != 0) {
 		device_printf(dev, "could not setup interrupt");
@@ -490,6 +506,7 @@ static int
 i2c_repeated_start(device_t dev, u_char slave, int timeout)
 {
 
+	device_printf(dev, "i2c_repeated_start is called\n");
 	return 0;
 }
 
@@ -497,6 +514,7 @@ static int
 i2c_start(device_t dev, u_char slave, int timeout)
 {
 
+	device_printf(dev, "i2c_start is called\n");
 	return 0;
 }
 
@@ -504,6 +522,7 @@ static int
 i2c_stop(device_t dev)
 {
 
+	device_printf(dev, "i2c_stop is called\n");
 	return 0;
 }
 
@@ -511,6 +530,7 @@ static int
 i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 {
 
+	device_printf(dev, "i2c_reset is called\n");
 	return 0;
 }
 
@@ -518,6 +538,7 @@ static int
 i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 {
 
+	device_printf(dev, "i2c_read is called\n");
 	return 0;
 }
 
@@ -525,5 +546,6 @@ static int
 i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 {
 
+	device_printf(dev, "i2c_write is called\n");
 	return 0;
 }
