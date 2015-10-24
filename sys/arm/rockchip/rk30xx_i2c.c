@@ -174,19 +174,33 @@ static struct ofw_compat_data compat_data[] = {
 	{"rockchip,rk30xx-i2c", 1},
 	{NULL,                  0}
 };
+static __inline void
+i2c_write_reg_1(struct i2c_softc *sc, bus_size_t off, uint8_t val)
+{
+
+	bus_space_write_1(sc->bst, sc->bsh, off, val);
+}
+
 
 static __inline void
-i2c_write_reg(struct i2c_softc *sc, bus_size_t off, uint32_t val)
+i2c_write_reg_4(struct i2c_softc *sc, bus_size_t off, uint32_t val)
 {
 
 	bus_space_write_4(sc->bst, sc->bsh, off, val);
 }
 
-static __inline uint32_t
-i2c_read_reg(struct i2c_softc *sc, bus_size_t off)
+static __inline uint8_t
+i2c_read_reg_1(struct i2c_softc *sc, bus_size_t off)
 {
 
-	return bus_space_read_4(sc->bst, sc->bsh, off);
+	return (bus_space_read_1(sc->bst, sc->bsh, off));
+}
+
+static __inline uint32_t
+i2c_read_reg_4(struct i2c_softc *sc, bus_size_t off)
+{
+
+	return (bus_space_read_4(sc->bst, sc->bsh, off));
 }
 
 static void
@@ -195,22 +209,22 @@ i2c_dump_reg(struct i2c_softc *sc)
 	device_t dev = sc->dev;
 	int i;
 
-	device_printf(dev, "%s: I2C_CON_REG:       0x%08x\n", __func__, i2c_read_reg(sc, I2C_CON_REG));
-	device_printf(dev, "%s: I2C_CLKDIV_REG:    0x%08x\n", __func__, i2c_read_reg(sc, I2C_CLKDIV_REG));
-	device_printf(dev, "%s: I2C_MRXADDR_REG:   0x%08x\n", __func__, i2c_read_reg(sc, I2C_MRXADDR_REG));
-	device_printf(dev, "%s: I2C_MRXRADDR_REG:  0x%08x\n", __func__, i2c_read_reg(sc, I2C_MRXRADDR_REG));
-	device_printf(dev, "%s: I2C_MTXCNT_REG:    0x%08x\n", __func__, i2c_read_reg(sc, I2C_MTXCNT_REG));
-	device_printf(dev, "%s: I2C_MRXCNT_REG:    0x%08x\n", __func__, i2c_read_reg(sc, I2C_MRXCNT_REG));
-	device_printf(dev, "%s: I2C_IEN_REG:       0x%08x\n", __func__, i2c_read_reg(sc, I2C_IEN_REG));
-	device_printf(dev, "%s: I2C_IPD_REG:       0x%08x\n", __func__, i2c_read_reg(sc, I2C_IPD_REG));
-	device_printf(dev, "%s: I2C_FCNT_REG:      0x%08x\n", __func__, i2c_read_reg(sc, I2C_FCNT_REG));
+	device_printf(dev, "%s: I2C_CON_REG:       0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_CON_REG));
+	device_printf(dev, "%s: I2C_CLKDIV_REG:    0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_CLKDIV_REG));
+	device_printf(dev, "%s: I2C_MRXADDR_REG:   0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_MRXADDR_REG));
+	device_printf(dev, "%s: I2C_MRXRADDR_REG:  0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_MRXRADDR_REG));
+	device_printf(dev, "%s: I2C_MTXCNT_REG:    0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_MTXCNT_REG));
+	device_printf(dev, "%s: I2C_MRXCNT_REG:    0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_MRXCNT_REG));
+	device_printf(dev, "%s: I2C_IEN_REG:       0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_IEN_REG));
+	device_printf(dev, "%s: I2C_IPD_REG:       0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_IPD_REG));
+	device_printf(dev, "%s: I2C_FCNT_REG:      0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_FCNT_REG));
 
 	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
-		device_printf(dev, "%s: I2C_TXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg(sc, I2C_TXDATA_REG(i)));
+		device_printf(dev, "%s: I2C_TXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg_4(sc, I2C_TXDATA_REG(i)));
 	}
 
 	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
-		device_printf(dev, "%s: I2C_RXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg(sc, I2C_RXDATA_REG(i)));
+		device_printf(dev, "%s: I2C_RXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg_4(sc, I2C_RXDATA_REG(i)));
 	}
 }
 
@@ -260,7 +274,7 @@ cru_read_reg(bus_size_t off)
 	ret = bus_space_read_4(fdtbus_bs_tag, bsh, off);
 	bus_space_unmap(fdtbus_bs_tag, bsh, CRU_SIZE);
 
-	return ret;
+	return (ret);
 }
 
 static uint32_t
@@ -274,28 +288,28 @@ rockchip_pll_get_rate(bus_size_t con0_reg, bus_size_t con1_reg)
 	no = __SHIFTOUT(pll_con0, RK3188_CRU_PLL_CON0_CLKOD) + 1;
 	nf = __SHIFTOUT(pll_con1, RK3188_CRU_PLL_CON1_CLKF) + 1;
 
-	return ((uint64_t)ROCKCHIP_REF_FREQ * nf) / (nr * no);
+	return (((uint64_t)ROCKCHIP_REF_FREQ * nf) / (nr * no));
 }
 
 static uint32_t
 rockchip_gpll_get_rate()
 {
 
-	return rockchip_pll_get_rate(CRU_GPLL_CON_REG(0), CRU_GPLL_CON_REG(1));
+	return (rockchip_pll_get_rate(CRU_GPLL_CON_REG(0), CRU_GPLL_CON_REG(1)));
 }
 
 static uint32_t
 rockchip_cpll_get_rate(void)
 {
 
-	return rockchip_pll_get_rate(CRU_CPLL_CON_REG(0), CRU_CPLL_CON_REG(1));
+	return (rockchip_pll_get_rate(CRU_CPLL_CON_REG(0), CRU_CPLL_CON_REG(1)));
 }
 
 static uint32_t
 rockchip_apll_get_rate()
 {
 
-	return rockchip_pll_get_rate(CRU_APLL_CON_REG(0), CRU_APLL_CON_REG(1));
+	return (rockchip_pll_get_rate(CRU_APLL_CON_REG(0), CRU_APLL_CON_REG(1)));
 }
 
 static uint32_t
@@ -306,9 +320,9 @@ rockchip_cpu_get_rate()
 
 	a9_core_div = __SHIFTOUT(clksel_con0, RK3188_CRU_CLKSEL_CON0_A9_CORE_DIV_CON) + 1;
 	if (clksel_con0 & CRU_CLKSEL_CON0_CPU_CLK_PLL_SEL) {
-		return rockchip_gpll_get_rate() / a9_core_div;
+		return (rockchip_gpll_get_rate() / a9_core_div);
 	} else {
-		return rockchip_apll_get_rate() / a9_core_div;
+		return (rockchip_apll_get_rate() / a9_core_div);
 	}
 }
 
@@ -327,11 +341,11 @@ rockchip_pclk_cpu_get_rate()
 	case 2: core_axi_div = 3; break;
 	case 3: core_axi_div = 4; break;
 	case 4: core_axi_div = 8; break;
-	default: return EINVAL;
+	default: return (EINVAL);
 	}
 	pclk_div = 1 << __SHIFTOUT(clksel_con1, CRU_CLKSEL_CON1_CPU_PCLK_DIV_CON);
 
-	return rockchip_cpu_get_rate() / (core_axi_div * pclk_div);
+	return (rockchip_cpu_get_rate() / (core_axi_div * pclk_div));
 }
 
 static uint32_t
@@ -350,16 +364,16 @@ rockchip_apb_get_rate()
 	aclk_div = __SHIFTOUT(clksel_con10, CRU_CLKSEL_CON10_PERI_ACLK_DIV_CON) + 1;
 	pclk_div = 1 << __SHIFTOUT(clksel_con10, CRU_CLKSEL_CON10_PERI_PCLK_DIV_CON);
 
-	return rate / (aclk_div * pclk_div);
+	return (rate / (aclk_div * pclk_div));
 }
 
 static uint32_t
 rockchip_i2c_get_rate(uint32_t port)
 {
 	if (port == 0 || port == 1) {
-		return rockchip_pclk_cpu_get_rate();
+		return (rockchip_pclk_cpu_get_rate());
 	} else {
-		return rockchip_apb_get_rate();
+		return (rockchip_apb_get_rate());
 	}
 }
 
@@ -376,7 +390,7 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 	port = device_get_unit(sc->dev);
 	i2c_rate = rockchip_i2c_get_rate(port);
 	if (i2c_rate == 0) {
-		return ENXIO;
+		return (ENXIO);
 	}
 	device_printf(sc->dev, "%s: i2c rate@%d=%u\n", __func__, port, i2c_rate);
 
@@ -387,9 +401,9 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 	div = (i2c_rate + (rate * 8 - 1)) / (rate * 8);
 	divh = divl = (div + (2 - 1)) / 2;
 	clkdiv = (divh << 16) | (divl & I2C_CLKDIV_LOW);
-	i2c_write_reg(sc, I2C_CLKDIV_REG, clkdiv);
+	i2c_write_reg_4(sc, I2C_CLKDIV_REG, clkdiv);
 
-	return 0;
+	return (IIC_NOERR);
 }
 
 static int
@@ -399,7 +413,7 @@ i2c_intr(void *arg)
 	uint32_t ipd;
 
 	sc = (struct i2c_softc *)arg;
-	ipd = i2c_read_reg(sc, I2C_IPD_REG);
+	ipd = i2c_read_reg_4(sc, I2C_IPD_REG);
 
 	if (ipd & I2C_INT_BTF) {
 		device_printf(sc->dev, "%s: I2C_INT_BTF\n", __func__);
@@ -429,7 +443,7 @@ i2c_intr(void *arg)
 		device_printf(sc->dev, "%s: I2C_INT_NAKRCV\n", __func__);
 	}
 
-	return 0;
+	return (IIC_NOERR);
 }
 
 static int
@@ -494,7 +508,7 @@ i2c_get_node(device_t bus, device_t dev)
 	/*
 	 * Share controller node with iicbus device
 	 */
-	return ofw_bus_get_node(bus);
+	return (ofw_bus_get_node(bus));
 }
 
 static int
@@ -502,23 +516,34 @@ i2c_repeated_start(device_t dev, u_char slave, int timeout)
 {
 
 	device_printf(dev, "%s is called\n", __func__);
-	return 0;
+
+	return (IIC_NOERR);
 }
 
 static int
 i2c_start(device_t dev, u_char slave, int timeout)
 {
+	struct i2c_softc *sc;
 
 	device_printf(dev, "%s is called\n", __func__);
-	return 0;
+	sc = device_get_softc(dev);
+
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_START);
+
+	return (IIC_NOERR);
 }
 
 static int
 i2c_stop(device_t dev)
 {
+	struct i2c_softc *sc;
 
 	device_printf(dev, "%s is called\n", __func__);
-	return 0;
+	sc = device_get_softc(dev);
+
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_STOP);
+
+	return (IIC_NOERR);
 }
 
 static int
@@ -532,43 +557,83 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 	sc = device_get_softc(dev);
 
 	mtx_lock(&sc->mutex);
-	i2c_write_reg(sc, I2C_CON_REG,      0x00000000);
-	i2c_write_reg(sc, I2C_MRXADDR_REG,  0x00000000);
-	i2c_write_reg(sc, I2C_MRXRADDR_REG, 0x00000000);
-	i2c_write_reg(sc, I2C_MTXCNT_REG,   0x00000000);
-	i2c_write_reg(sc, I2C_MRXCNT_REG,   0x00000000);
-	i2c_write_reg(sc, I2C_IEN_REG,      0x00000000);
-	i2c_write_reg(sc, I2C_IPD_REG,      0x00000000);
-	i2c_write_reg(sc, I2C_FCNT_REG,     0x00000000);
 	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
-		i2c_write_reg(sc, I2C_TXDATA_REG(i), 0x00000000);
+		i2c_write_reg_4(sc, I2C_TXDATA_REG(i), 0x00000000);
 	}
 	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
-		i2c_write_reg(sc, I2C_RXDATA_REG(i), 0x00000000);
+		i2c_write_reg_4(sc, I2C_RXDATA_REG(i), 0x00000000);
 	}
 
 	busfreq = IICBUS_GET_FREQUENCY(sc->iicbus, speed);
 	device_printf(dev, "%s: speed=%u\n", __func__, speed);
 	device_printf(dev, "%s: busfreq=%u\n", __func__, busfreq);
 	i2c_set_rate(sc, busfreq==0 ? I2C_CLOCK_RATE : busfreq);
-	i2c_dump_reg(sc);
 	mtx_unlock(&sc->mutex);
 
-	return 0;
+	return (IIC_NOERR);
 }
 
+/*
+ * TODO:
+ *   about byte order of TXDATA/RXDATA -> see NetBSD rockchip_i2c.c:rkiic_{read,write}()
+ *   about MRXCNT, MTXCNT
+ *   about another registers
+ *   how to start/stop multi transaction?
+ */
 static int
 i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 {
+	struct i2c_softc *sc;
+	uint32_t i2c_con_reg;
 
 	device_printf(dev, "%s is called\n", __func__);
-	return 0;
+	sc = device_get_softc(dev);
+	*read = 0;
+
+	mtx_lock(&sc->mutex);
+	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
+	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_RX);
+	i2c_write_reg_4(sc, I2C_MRXCNT_REG, len);
+	while (1) {
+		uint32_t i2c_ipd_reg = i2c_read_reg_4(sc, I2C_IPD_REG);
+		if (i2c_ipd_reg & I2C_INT_MBRF) {
+			break;
+		}
+	}
+	for (*read < len) {
+		*buf++ = i2c_read_reg_1(sc, I2C_RXDATA_REG(0)+(*read));
+		(*read)++;
+	}
+	mtx_unlock(&sc->mutex);
+
+	return (IIC_NOERR);
 }
 
 static int
 i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 {
+	struct i2c_softc *sc;
+	uint32_t i2c_con_reg;
 
 	device_printf(dev, "%s is called\n", __func__);
-	return 0;
+	sc = device_get_softc(dev);
+	*sent = 0;
+
+	mtx_lock(&sc->mutex);
+	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
+	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_TX);
+	for (*sent < len) {
+		i2c_write_reg_1(sc, I2C_TXDATA_REG(0)+(*sent), *buf++);
+		(*sent)++;
+	}
+	i2c_write_reg_1(sc, I2C_MTXCNT_REG, *sent);
+	while (1) {
+		uint32_t i2c_ipd_reg = i2c_read_reg_4(sc, I2C_IPD_REG);
+		if (i2c_ipd_reg & I2C_INT_MBTF) {
+			break;
+		}
+	}
+	mtx_unlock(&sc->mutex);
+
+	return (IIC_NOERR);
 }
