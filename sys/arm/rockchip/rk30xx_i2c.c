@@ -573,23 +573,32 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 	return (IIC_NOERR);
 }
 
-/*
- * TODO:
- *   about byte order of TXDATA/RXDATA -> see NetBSD rockchip_i2c.c:rkiic_{read,write}()
- *   about MRXCNT, MTXCNT
- *   about another registers
- *   how to start/stop multi transaction?
- */
+static int
+wait_for_intr(struct i2c_softc *sc, uint32_t intr, int delay)
+{
+
+	device_printf(sc->dev, "%s: delay=%d\n", __func__, delay);
+	while (delay--) {
+		if (i2c_read_reg_4(sc, I2C_IPD_REG) & intr)
+			return (IIC_NOERR);
+		DELAY(1);
+	}
+
+	return (IIC_ETIMEOUT);
+}
+
 static int
 i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 {
 	struct i2c_softc *sc;
 	uint32_t i2c_con_reg;
+	int error;
 
 	device_printf(dev, "%s is called\n", __func__);
 	sc = device_get_softc(dev);
 	*read = 0;
 
+	device_printf(dev, "%s: len=%d\n", __func__, len);
 	if (len < 1 || len > 32) {
 		return (EINVAL);
 	}
@@ -598,17 +607,20 @@ i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_RX);
 	i2c_write_reg_4(sc, I2C_MRXCNT_REG, len);
-	while (1) {
-		uint32_t i2c_ipd_reg = i2c_read_reg_4(sc, I2C_IPD_REG);
-		if (i2c_ipd_reg & I2C_INT_MBRF) {
-			break;
-		}
+	error = wait_for_intr(I2C_INT_MBRF, delay);
+	if (error) {
+		goto done;
 	}
-	for (*read < len) {
+	while (*read < len) {
 		*buf++ = i2c_read_reg_1(sc, I2C_RXDATA_REG(0)+(*read));
 		(*read)++;
 	}
+done:
 	mtx_unlock(&sc->mutex);
+
+	if (error) {
+		return (error);
+	}
 
 	return (IIC_NOERR);
 }
@@ -618,11 +630,13 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 {
 	struct i2c_softc *sc;
 	uint32_t i2c_con_reg;
+	int error;
 
 	device_printf(dev, "%s is called\n", __func__);
 	sc = device_get_softc(dev);
 	*sent = 0;
 
+	device_printf(dev, "%s: len=%d\n", __func__, len);
 	if (len < 1 || len > 32) {
 		return (EINVAL);
 	}
@@ -630,18 +644,17 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 	mtx_lock(&sc->mutex);
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_TX);
-	for (*sent < len) {
+	while (*sent < len) {
 		i2c_write_reg_1(sc, I2C_TXDATA_REG(0)+(*sent), *buf++);
 		(*sent)++;
 	}
 	i2c_write_reg_1(sc, I2C_MTXCNT_REG, *sent);
-	while (1) {
-		uint32_t i2c_ipd_reg = i2c_read_reg_4(sc, I2C_IPD_REG);
-		if (i2c_ipd_reg & I2C_INT_MBTF) {
-			break;
-		}
-	}
+	error = wait_for_intr(I2C_INT_MBTF, timeout);
 	mtx_unlock(&sc->mutex);
+
+	if (error) {
+		return (error);
+	}
 
 	return (IIC_NOERR);
 }
