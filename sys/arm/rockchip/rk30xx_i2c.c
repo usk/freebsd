@@ -590,6 +590,10 @@ i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 	sc = device_get_softc(dev);
 	*read = 0;
 
+	if (len < 1 || len > 32) {
+		return (EINVAL);
+	}
+
 	mtx_lock(&sc->mutex);
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_RX);
@@ -618,6 +622,10 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 	device_printf(dev, "%s is called\n", __func__);
 	sc = device_get_softc(dev);
 	*sent = 0;
+
+	if (len < 1 || len > 32) {
+		return (EINVAL);
+	}
 
 	mtx_lock(&sc->mutex);
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
