@@ -68,9 +68,11 @@ __FBSDID("$FreeBSD$");
 #define I2C_IPD_REG		0x001c
 #define I2C_FCNT_REG		0x0020
 #define I2C_TXDATA_REG(n)	(0x0100 + ((n) * 4))
+#define I2C_TXDATA_MAX_REGS	8  /* number of regs */
+#define I2C_TXDATA_REG_SIZE	4  /* bytes per reg */
 #define I2C_RXDATA_REG(n)	(0x0200 + ((n) * 4))
-#define I2C_TXDATA_REG_MAX	8
-#define I2C_RXDATA_REG_MAX	8
+#define I2C_RXDATA_MAX_REGS	8  /* number of regs */
+#define I2C_RXDATA_REG_SIZE	4  /* bytes per reg */
 
 #define I2C_CON_EN		(1 << 0)
 #define I2C_CON_MODE_TX	(0 << 1)  /* TX only mode */
@@ -129,7 +131,7 @@ static device_method_t i2c_methods[] = {
 	DEVMETHOD(device_attach,		i2c_attach),
 	DEVMETHOD(ofw_bus_get_node,		i2c_get_node),
 	DEVMETHOD(iicbus_callback,		iicbus_null_callback),
-	DEVMETHOD(iicbus_repeated_start,	i2c_repeated_start),
+	/* DEVMETHOD(iicbus_repeated_start,	i2c_repeated_start), */
 	DEVMETHOD(iicbus_start,		i2c_start),
 	DEVMETHOD(iicbus_stop,			i2c_stop),
 	DEVMETHOD(iicbus_reset,		i2c_reset),
@@ -198,10 +200,10 @@ i2c_dump_reg(struct i2c_softc *sc)
 	device_printf(dev, "%s: I2C_IEN_REG:       0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_IEN_REG));
 	device_printf(dev, "%s: I2C_IPD_REG:       0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_IPD_REG));
 	device_printf(dev, "%s: I2C_FCNT_REG:      0x%08x\n", __func__, i2c_read_reg_4(sc, I2C_FCNT_REG));
-	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
+	for (i = 0; i < I2C_TXDATA_MAX_REGS; i++) {
 		device_printf(dev, "%s: I2C_TXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg_4(sc, I2C_TXDATA_REG(i)));
 	}
-	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
+	for (i = 0; i < I2C_RXDATA_MAX_REGS; i++) {
 		device_printf(dev, "%s: I2C_RXDATA_REG[%d]: 0x%08x\n", __func__, i, i2c_read_reg_4(sc, I2C_RXDATA_REG(i)));
 	}
 }
@@ -417,6 +419,7 @@ i2c_intr(void *arg)
 		device_printf(sc->dev, "%s: I2C_INT_NAKRCV\n", __func__);
 	}
 
+	mtx_unlock(&sc->mutex);
 	return (IIC_NOERR);
 }
 
@@ -524,17 +527,25 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 	sc = device_get_softc(dev);
 
 	mtx_lock(&sc->mutex);
-	for (i = 0; i < I2C_TXDATA_REG_MAX; i++) {
-		i2c_write_reg_4(sc, I2C_TXDATA_REG(i), 0x00000000);
+
+	i2c_write_reg_4(sc, I2C_CON_REG, 0);
+	i2c_write_reg_4(sc, I2C_MTXCNT_REG, 0);
+	i2c_write_reg_4(sc, I2C_MRXCNT_REG, 0);
+	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
+	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
+
+	for (i = 0; i < I2C_TXDATA_MAX_REGS; i++) {
+		i2c_write_reg_4(sc, I2C_TXDATA_REG(i), 0);
 	}
-	for (i = 0; i < I2C_RXDATA_REG_MAX; i++) {
-		i2c_write_reg_4(sc, I2C_RXDATA_REG(i), 0x00000000);
+	for (i = 0; i < I2C_RXDATA_MAX_REGS; i++) {
+		i2c_write_reg_4(sc, I2C_RXDATA_REG(i), 0);
 	}
 
 	busfreq = IICBUS_GET_FREQUENCY(sc->iicbus, speed);
 	device_printf(dev, "%s: speed=%u\n", __func__, speed);
 	device_printf(dev, "%s: busfreq=%u\n", __func__, busfreq);
 	i2c_set_rate(sc, busfreq);
+
 	mtx_unlock(&sc->mutex);
 
 	return (IIC_NOERR);
@@ -543,7 +554,7 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 static int
 wait_for_intr(struct i2c_softc *sc, uint32_t intr)
 {
-	int delay = 1000;
+	int delay = 2000;
 
 	device_printf(sc->dev, "%s: delay=%d\n", __func__, delay);
 	while (delay--) {
@@ -568,13 +579,15 @@ i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 	sc = device_get_softc(dev);
 	*read = 0;
 
-	mtx_lock(&sc->mutex);
-	if (len < 0 || len > 32) {
-		goto done;
+	if (len < 0 || len > I2C_RXDATA_MAX_REGS * I2C_RXDATA_REG_SIZE) {
+		return (error);
 	}
+
+	mtx_lock(&sc->mutex);
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_RX);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_START);
+	i2c_write_reg_4(sc, I2C_IEN_REG, I2C_INT_MBRF);
 	i2c_write_reg_4(sc, I2C_MRXCNT_REG, len);
 	error = wait_for_intr(sc, I2C_INT_MBRF);
 	if (error) {
@@ -585,12 +598,11 @@ i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 		(*read)++;
 	}
 done:
+	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
+	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
 	mtx_unlock(&sc->mutex);
-	if (error) {
-		return (error);
-	}
 
-	return (IIC_NOERR);
+	return (error);
 }
 
 static int
@@ -605,10 +617,11 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 	sc = device_get_softc(dev);
 	*sent = 0;
 
-	mtx_lock(&sc->mutex);
-	if (len < 0 || len > 32) {
-		goto done;
+	if (len < 0 || len > I2C_TXDATA_MAX_REGS * I2C_TXDATA_REG_SIZE) {
+		return (error);
 	}
+
+	mtx_lock(&sc->mutex);
 	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_TX);
 	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_START);
@@ -616,13 +629,12 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 		i2c_write_reg_1(sc, I2C_TXDATA_REG(0)+(*sent), *buf++);
 		(*sent)++;
 	}
+	i2c_write_reg_4(sc, I2C_IEN_REG, I2C_INT_MBTF);
 	i2c_write_reg_4(sc, I2C_MTXCNT_REG, *sent);
 	error = wait_for_intr(sc, I2C_INT_MBTF);
-done:
+	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
+	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
 	mtx_unlock(&sc->mutex);
-	if (error) {
-		return (error);
-	}
 
-	return (IIC_NOERR);
+	return (error);
 }
