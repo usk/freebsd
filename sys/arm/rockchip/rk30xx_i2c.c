@@ -119,7 +119,6 @@ static struct resource_spec i2c_spec[] = {
 static int i2c_probe(device_t);
 static int i2c_attach(device_t);
 static phandle_t i2c_get_node(device_t, device_t);
-static int i2c_repeated_start(device_t, u_char, int);
 static int i2c_start(device_t, u_char, int);
 static int i2c_stop(device_t);
 static int i2c_reset(device_t, u_char, u_char, u_char *);
@@ -131,7 +130,6 @@ static device_method_t i2c_methods[] = {
 	DEVMETHOD(device_attach,		i2c_attach),
 	DEVMETHOD(ofw_bus_get_node,		i2c_get_node),
 	DEVMETHOD(iicbus_callback,		iicbus_null_callback),
-	/* DEVMETHOD(iicbus_repeated_start,	i2c_repeated_start), */
 	DEVMETHOD(iicbus_start,		i2c_start),
 	DEVMETHOD(iicbus_stop,			i2c_stop),
 	DEVMETHOD(iicbus_reset,		i2c_reset),
@@ -158,24 +156,10 @@ static struct ofw_compat_data compat_data[] = {
 };
 
 static __inline void
-i2c_write_reg_1(struct i2c_softc *sc, bus_size_t off, uint8_t val)
-{
-
-	bus_space_write_1(sc->bst, sc->bsh, off, val);
-}
-
-static __inline void
 i2c_write_reg_4(struct i2c_softc *sc, bus_size_t off, uint32_t val)
 {
 
 	bus_space_write_4(sc->bst, sc->bsh, off, val);
-}
-
-static __inline uint8_t
-i2c_read_reg_1(struct i2c_softc *sc, bus_size_t off)
-{
-
-	return (bus_space_read_1(sc->bst, sc->bsh, off));
 }
 
 static __inline uint32_t
@@ -366,9 +350,9 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 	port = device_get_unit(sc->dev);
 	i2c_rate = rockchip_i2c_get_rate(port);
 	if (i2c_rate == 0) {
+		device_printf(sc->dev, "%s: cannot set i2c rate@%d\n", __func__, port);
 		return (ENXIO);
 	}
-	device_printf(sc->dev, "%s: i2c rate@%d=%u\n", __func__, port, i2c_rate);
 
 	/*
 	 * SCL Divisor = 8 * (CLKDIVL + CLKDIVH)
@@ -378,6 +362,7 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 	divh = divl = (div + (2 - 1)) / 2;
 	clkdiv = (divh << 16) | (divl & I2C_CLKDIV_LOW);
 	i2c_write_reg_4(sc, I2C_CLKDIV_REG, clkdiv);
+	device_printf(sc->dev, "%s: i2c rate@%d=%u\n", __func__, port, i2c_rate);
 
 	return (IIC_NOERR);
 }
@@ -385,41 +370,38 @@ i2c_set_rate(struct i2c_softc *sc, uint32_t rate)
 static int
 i2c_intr(void *arg)
 {
-	struct i2c_softc *sc;
-	uint32_t ipd;
-
-	sc = (struct i2c_softc *)arg;
-	ipd = i2c_read_reg_4(sc, I2C_IPD_REG);
+	struct i2c_softc *sc = (struct i2c_softc *)arg;
+	uint32_t ipd = i2c_read_reg_4(sc, I2C_IPD_REG);
 
 	if (ipd & I2C_INT_BTF) {
 		device_printf(sc->dev, "%s: I2C_INT_BTF\n", __func__);
+		ipd &= ~I2C_INT_BTF;
 	}
-
 	if (ipd & I2C_INT_BRF) {
 		device_printf(sc->dev, "%s: I2C_INT_BRF\n", __func__);
+		ipd &= ~I2C_INT_BRF;
 	}
-
 	if (ipd & I2C_INT_MBTF) {
 		device_printf(sc->dev, "%s: I2C_INT_MBTF\n", __func__);
+		ipd &= ~I2C_INT_MBTF;
 	}
-
 	if (ipd & I2C_INT_MBRF) {
 		device_printf(sc->dev, "%s: I2C_INT_MBRF\n", __func__);
+		ipd &= ~I2C_INT_MBRF;
 	}
-
 	if (ipd & I2C_INT_START) {
 		device_printf(sc->dev, "%s: I2C_INT_START\n", __func__);
+		ipd &= ~I2C_INT_START;
 	}
-
 	if (ipd & I2C_INT_STOP) {
 		device_printf(sc->dev, "%s: I2C_INT_STOP\n", __func__);
+		ipd &= ~I2C_INT_STOP;
 	}
-
 	if (ipd & I2C_INT_NAKRCV) {
 		device_printf(sc->dev, "%s: I2C_INT_NAKRCV\n", __func__);
+		ipd &= ~I2C_INT_NAKRCV;
 	}
 
-	mtx_unlock(&sc->mutex);
 	return (IIC_NOERR);
 }
 
@@ -487,11 +469,22 @@ i2c_get_node(device_t bus, device_t dev)
 }
 
 static int
-i2c_repeated_start(device_t dev, u_char slave, int timeout)
+wait_for_intr(struct i2c_softc *sc, uint32_t intr)
 {
+	int delay = 100000;
 
-	device_printf(dev, "%s is called\n", __func__);
-	return (IIC_NOERR);
+	device_printf(sc->dev, "%s: waiting for interrupt 0x%x\n", __func__, intr);
+	while (delay--) {
+		uint32_t reg = i2c_read_reg_4(sc, I2C_IPD_REG);
+		if (reg & intr) {
+			device_printf(sc->dev, "%s: detected interrupt 0x%x\n", __func__, intr);
+			return (IIC_NOERR);
+		}
+		DELAY(10);
+	}
+	device_printf(sc->dev, "%s: not detected interrupt 0x%x\n", __func__, intr);
+
+	return (IIC_ETIMEOUT);
 }
 
 static int
@@ -506,14 +499,21 @@ static int
 i2c_stop(device_t dev)
 {
 	struct i2c_softc *sc;
-	uint32_t i2c_con_reg;
+	int error = EINVAL;
 
 	device_printf(dev, "%s is called\n", __func__);
 	sc = device_get_softc(dev);
-	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
-	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_STOP);
 
-	return (IIC_NOERR);
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_STOP);
+	error = wait_for_intr(sc, I2C_INT_STOP);
+	if (error != IIC_NOERR) {
+		device_printf(dev, "%s: not detected I2C_INT_STOP\n", __func__);
+		goto done;
+	}
+	i2c_write_reg_4(sc, I2C_CON_REG, 0);
+
+done:
+	return (error);
 }
 
 static int
@@ -527,52 +527,32 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldadr)
 	sc = device_get_softc(dev);
 
 	mtx_lock(&sc->mutex);
-
 	i2c_write_reg_4(sc, I2C_CON_REG, 0);
 	i2c_write_reg_4(sc, I2C_MTXCNT_REG, 0);
 	i2c_write_reg_4(sc, I2C_MRXCNT_REG, 0);
-	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
+	i2c_write_reg_4(sc, I2C_IEN_REG, 0xffffffff);
 	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
-
 	for (i = 0; i < I2C_TXDATA_MAX_REGS; i++) {
 		i2c_write_reg_4(sc, I2C_TXDATA_REG(i), 0);
 	}
 	for (i = 0; i < I2C_RXDATA_MAX_REGS; i++) {
 		i2c_write_reg_4(sc, I2C_RXDATA_REG(i), 0);
 	}
-
 	busfreq = IICBUS_GET_FREQUENCY(sc->iicbus, speed);
 	device_printf(dev, "%s: speed=%u\n", __func__, speed);
 	device_printf(dev, "%s: busfreq=%u\n", __func__, busfreq);
 	i2c_set_rate(sc, busfreq);
-
 	mtx_unlock(&sc->mutex);
 
 	return (IIC_NOERR);
 }
 
 static int
-wait_for_intr(struct i2c_softc *sc, uint32_t intr)
-{
-	int delay = 2000;
-
-	device_printf(sc->dev, "%s: delay=%d\n", __func__, delay);
-	while (delay--) {
-		if (i2c_read_reg_4(sc, I2C_IPD_REG) & intr) {
-			return (IIC_NOERR);
-		}
-		DELAY(1);
-	}
-
-	return (IIC_ETIMEOUT);
-}
-
-static int
 i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 {
 	struct i2c_softc *sc;
-	uint32_t i2c_con_reg;
 	int error = EINVAL;
+	int reg_idx = 0;
 
 	device_printf(dev, "%s is called\n", __func__);
 	device_printf(dev, "%s: len=%d\n", __func__, len);
@@ -584,22 +564,38 @@ i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 	}
 
 	mtx_lock(&sc->mutex);
-	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
-	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_RX);
-	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_START);
-	i2c_write_reg_4(sc, I2C_IEN_REG, I2C_INT_MBRF);
+
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN);
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_START);
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_MODE_RX|I2C_CON_START);
+	error = wait_for_intr(sc, I2C_INT_START);
+	if (error != IIC_NOERR) {
+		device_printf(dev, "%s: not detected I2C_INT_START\n", __func__);
+		i2c_dump_reg(sc);
+		goto done;
+	}
+
 	i2c_write_reg_4(sc, I2C_MRXCNT_REG, len);
 	error = wait_for_intr(sc, I2C_INT_MBRF);
-	if (error) {
+	if (error != IIC_NOERR) {
+		device_printf(dev, "%s: not detected I2C_INT_MBRF\n", __func__);
+		i2c_dump_reg(sc);
 		goto done;
 	}
 	while (*read < len) {
-		*buf++ = i2c_read_reg_1(sc, I2C_RXDATA_REG(0)+(*read));
-		(*read)++;
+		uint32_t reg = i2c_read_reg_4(sc, I2C_RXDATA_REG(reg_idx++));
+		uint32_t rest = len - (*read);
+		rest = rest > I2C_RXDATA_REG_SIZE ? I2C_RXDATA_REG_SIZE : rest;
+		*read += rest;
+		reg >>= (I2C_RXDATA_REG_SIZE - rest) * 8;
+		while (--rest > 0) {
+			*buf++ = reg | 0xff;
+			reg >>= 8;
+		}
 	}
+	device_printf(dev, "%s: receive %d bytes\n", __func__, *read);
+
 done:
-	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
-	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
 	mtx_unlock(&sc->mutex);
 
 	return (error);
@@ -609,8 +605,8 @@ static int
 i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 {
 	struct i2c_softc *sc;
-	uint32_t i2c_con_reg;
 	int error = EINVAL;
+	int reg_idx = 0;
 
 	device_printf(dev, "%s is called\n", __func__);
 	device_printf(dev, "%s: len=%d\n", __func__, len);
@@ -622,18 +618,37 @@ i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 	}
 
 	mtx_lock(&sc->mutex);
-	i2c_con_reg = i2c_read_reg_4(sc, I2C_CON_REG);
-	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_MODE_TX);
-	i2c_write_reg_4(sc, I2C_CON_REG, i2c_con_reg|I2C_CON_START);
-	while (*sent < len) {
-		i2c_write_reg_1(sc, I2C_TXDATA_REG(0)+(*sent), *buf++);
-		(*sent)++;
+
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN);
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_MODE_TX);
+	i2c_write_reg_4(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_MODE_TX|I2C_CON_START);
+	error = wait_for_intr(sc, I2C_INT_START);
+	if (error != IIC_NOERR) {
+		device_printf(dev, "%s: not detected I2C_INT_START\n", __func__);
+		i2c_dump_reg(sc);
+		goto done;
 	}
-	i2c_write_reg_4(sc, I2C_IEN_REG, I2C_INT_MBTF);
+
+	while (*sent < len) {
+		uint32_t reg = *buf;
+		uint32_t rest = len - (*sent);
+		rest = rest > I2C_TXDATA_REG_SIZE ? I2C_TXDATA_REG_SIZE : rest;
+		*sent += rest;
+		while (--rest > 0) {
+			reg = reg << 8 | *(++buf);
+		}
+		i2c_write_reg_4(sc, I2C_TXDATA_REG(reg_idx++), reg);
+	}
+	device_printf(dev, "%s: transmit %d bytes\n", __func__, *sent);
 	i2c_write_reg_4(sc, I2C_MTXCNT_REG, *sent);
 	error = wait_for_intr(sc, I2C_INT_MBTF);
-	i2c_write_reg_4(sc, I2C_IEN_REG, 0);
-	i2c_write_reg_4(sc, I2C_IPD_REG, 0);
+	if (error != IIC_NOERR) {
+		device_printf(dev, "%s: not detected I2C_INT_MBTF\n", __func__);
+		i2c_dump_reg(sc);
+		goto done;
+	}
+
+done:
 	mtx_unlock(&sc->mutex);
 
 	return (error);
