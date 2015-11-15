@@ -123,7 +123,7 @@
 			clock-frequency = < 66000000 >;
 		};
 
-		i2c0: iic@0x2002d000 {
+		i2c0: iic@2002d000 {
 			compatible = "rockchip,rk30xx-i2c";
 			reg = <0x2002d000 0x1000>;
 			interrupts = <72>;
@@ -131,21 +131,21 @@
 			status = "disabled";
 		};
 
-		i2c1: iic@0x2002f000 {
+		i2c1: iic@2002f000 {
 			compatible = "rockchip,rk30xx-i2c";
 			reg = <0x2002f000 0x1000>;
 			interrupts = <73>;
 			interrupt-parent = <&GIC>;
 			status = "disabled";
 
-			rtc@0x51 {
+			rtc@51 {
 				compatible = "nxp,pcf8563";
 				i2c-address = <0x51>;
 				status = "disabled";
 			};
 		};
 
-		i2c2: iic@0x20056000 {
+		i2c2: iic@20056000 {
 			compatible = "rockchip,rk30xx-i2c";
 			reg = <0x20056000 0x2000>;
 			interrupts = <74>;
@@ -153,7 +153,7 @@
 			status = "disabled";
 		};
 
-		i2c3: iic@0x2005a000 {
+		i2c3: iic@2005a000 {
 			compatible = "rockchip,rk30xx-i2c";
 			reg = <0x2005a000 0x2000>;
 			interrupts = <75>;
@@ -161,7 +161,7 @@
 			status = "disabled";
 		};
 
-		i2c4: iic@0x2005e000 {
+		i2c4: iic@2005e000 {
 			compatible = "rockchip,rk30xx-i2c";
 			reg = <0x2005e000 0x2000>;
 			interrupts = <84>;
