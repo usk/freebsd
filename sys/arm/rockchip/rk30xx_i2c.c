@@ -512,7 +512,7 @@ i2c_reset(device_t dev, u_char speed, u_char addr, u_char *oldaddr)
 	sc->ipd = 0;
 	i2c_write_reg(sc, I2C_CON_REG, 0);
 	i2c_write_reg(sc, I2C_IEN_REG, 0);
-	i2c_write_reg(sc, I2C_IPD_REG, i2c_read_reg(I2C_IPD_REG));
+	i2c_write_reg(sc, I2C_IPD_REG, i2c_read_reg(sc, I2C_IPD_REG));
 
 	busfreq = IICBUS_GET_FREQUENCY(sc->iicbus, speed);
 	i2c_set_rate(sc, busfreq);
@@ -540,13 +540,13 @@ i2c_start(device_t dev, u_char slave, int timeout)
 	i2c_write_reg(sc, I2C_IPD_REG, i2c_read_reg(sc, I2C_IPD_REG));
 	i2c_write_reg(sc, I2C_IEN_REG, I2C_INT_START|I2C_INT_STOP);
 	i2c_write_reg(sc, I2C_CON_REG, I2C_CON_EN|I2C_CON_START|I2C_CON_MODE_TXADDR);
-	wait_for_intr(sc, I2C_INT_START);
+	error = wait_for_intr(sc, I2C_INT_START);
 	if (error) {
 		mtx_unlock(&sc->mutex);
 		return (error);
 	}
 	/* i2c_write_reg(sc, I2C_IPD_REG, I2C_INT_START); */
-	i2c_write_reg(sc, I2C_CON_REG, i2c_read_reg(sc, I2C_CON_REG)||I2C_CON_START);
+	i2c_write_reg(sc, I2C_CON_REG, i2c_read_reg(sc, I2C_CON_REG)|I2C_CON_START);
 	i2c_write_reg(sc, I2C_MRXADDR_REG, (sc->saddr)|(1<<24));
 	i2c_write_reg(sc, I2C_MRXRADDR_REG, (sc->sraddr)|(1<<24));
 
@@ -557,7 +557,7 @@ static int
 i2c_stop(device_t dev)
 {
 	struct i2c_softc *sc;
-	int error = EINVAL;
+	int error;
 
 	device_printf(dev, "%s is called\n", __func__);
 
@@ -586,7 +586,7 @@ static int
 i2c_read(device_t dev, char *buf, int len, int *read, int last, int delay)
 {
 	struct i2c_softc *sc;
-	int error = EINVAL;
+	int error;
 	int reg_idx = 0;
 
 	device_printf(dev, "%s is called\n", __func__);
@@ -635,7 +635,7 @@ static int
 i2c_write(device_t dev, const char *buf, int len, int *sent, int timeout)
 {
 	struct i2c_softc *sc;
-	int error = EINVAL;
+	int error;
 	int reg_idx = 0;
 
 	device_printf(dev, "%s is called\n", __func__);
