@@ -55,7 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
 #include <vm/pmap.h>
-#include <machine/devmap.h>
+#include <sys/devmap.h>
 #include <machine/fdt.h>
 
 #define I2C_CON_REG		0x0000
